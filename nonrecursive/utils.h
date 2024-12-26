@@ -1,10 +1,13 @@
+#include <stdio.h>
 #include "common/sumset.h"
+
 #define NDEBUG 1
 
 #ifndef NDEBUG
 #define LOG(...)                                                                                \
     do {                                                                                        \
         fprintf(stderr, __VA_ARGS__);                                                           \
+        fprintf(stderr, "\n");                                                                  \
     } while(0)
 #else
 #define LOG(...) ((void)0)
@@ -30,3 +33,19 @@
             exit(EXIT_FAILURE);                                                \
         }                                                                      \
     } while (0)
+
+void print_sumset(const Sumset* a) {
+    if (!a)
+        return;
+    while (a->prev) {
+        fprintf(stderr, "%d ", a->last);
+        a = a->prev;
+    }
+}
+
+void print_sumsets(const Sumset* a, const Sumset* b) {
+    print_sumset(a);
+    fprintf(stderr, "\t\t");
+    print_sumset(b);
+    fprintf(stderr, "\n");
+}

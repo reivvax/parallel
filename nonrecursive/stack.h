@@ -1,26 +1,34 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "common/sumset.h"
 #include "utils.h"
 
+typedef enum NodeType {
+    SUMSET,
+    REMOVAL,
+    SWAP
+} NodeType;
+
 typedef struct Node {
-    Sumset* set;
-    bool removal;
+    const Sumset* set;
+    NodeType type;
     struct Node* prev;
 } Node;
 
 typedef struct Stack {
     struct Node* head;
+    size_t size;
 } Stack;
 
-Node* init_node(Sumset* set, bool removal, Node* prev) {
+Node* init_node(Sumset* set, NodeType type, Node* prev) {
     Node* n = (Node*) malloc(sizeof(Node));
     ASSERT_MALLOC_SUCCEEDED(n);
 
     n->set = set;
-    n->removal = removal;
+    n->type = type;
     n->prev = prev;
 
     return n;
@@ -36,11 +44,11 @@ Node* top(Stack* s) {
     return s->head;
 }
 
-void push(Stack* s, Sumset* set, bool removal) {
-    if (!s || !set)
+void push(Stack* s, Sumset* set, NodeType type) {
+    if (!s)
         return;
-    Node* n = init_node(set, removal, s->head);
-
+    Node* n = init_node(set, type, s->head);
+    s->size++;
     s->head = n;
 }
 
@@ -51,16 +59,20 @@ void pop(Stack* s) {
     
     Node* tmp = s->head;
     s->head = s->head->prev;
+    s->size--;
     free(tmp);
 }
 
 // Result value in res
-void pop_ret(Stack* s, Sumset** res, bool* removal) {
+void pop_ret(Stack* s, const Sumset** res, NodeType* type) {
     if (empty(s)) 
         return;
-
-    *res = s->head->set;
-    *removal = s->head->removal;
+    if (s->head->set)
+        *res = s->head->set;
+    if (s->head->type == REMOVAL)
+        assert(*res == s->head->set);
+    
+    *type = s->head->type;
     pop(s);
 }
 
@@ -71,4 +83,5 @@ void stack_dealloc(Stack* s) {
 
 void stack_init(Stack* s) {
     s->head = NULL;
+    s->size = 0;
 }
