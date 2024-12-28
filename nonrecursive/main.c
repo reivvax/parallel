@@ -22,7 +22,7 @@ void solve(InputData* input_data, Solution* best_solution) {
                 a = a->prev;
                 free((Sumset*)tmp);
                 break;
-            
+
             case SWAP:
                 LOG("UNSWAP");
                 tmp = a;
