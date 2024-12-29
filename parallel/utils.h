@@ -1,7 +1,10 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <stdio.h>
 #include "common/sumset.h"
 
-#define NDEBUG 1
+// #define NDEBUG 1
 
 #ifndef NDEBUG
 #define LOG(...)                                                                                \
@@ -49,3 +52,5 @@ void print_sumsets(const Sumset* a, const Sumset* b) {
     print_sumset(b);
     fprintf(stderr, "\n");
 }
+
+#endif

@@ -1,5 +1,8 @@
+#ifndef WORKER_H
+#define WORKER_H
+
 #include "stack.h"
-#include "wrapper.h"
+#include "monitor.h"
 
 #define ITERS_TO_SHARE_WORK 64
 
@@ -19,22 +22,11 @@ void args_init(WorkerArgs* args, Monitor* m, InputData* input_data, Solution* be
     args->done = &m->done;
 }
 
-// Data* init_stack_data(Sumset* a, Sumset* b, Wrapper* wrapper) {
-//     Data* data = (Data*) malloc(sizeof(Data));
-//     ASSERT_MALLOC_SUCCEEDED(data);
-
-//     data->a = a;
-//     data->b = b;
-//     data->wrapper = wrapper;
-
-//     return data;
-// }
-
 void* worker(void* args) {
     // unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    Monitor* m = unpacked_args->m;
+    // Monitor* m = unpacked_args->m;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
@@ -45,35 +37,42 @@ void* worker(void* args) {
     const Sumset* a;
     const Sumset* b;
     const Sumset* tmp;
-    stack_init(&s);
+    Sumset* to_free;
 
     do {
-        if (empty(&s)) {
+        LOG("Iteration: %d", loop_counter);
+        if (empty(s)) {
             // TODO, ASK THE MONITOR
+            LOG("FINISHED");
+            return 0;
+            loop_counter = 0; // IS IT NECCESARRY? (YES (MAYBE NOT))
         }
+        loop_counter++;
+        // if (loop_counter++ >= ITERS_TO_SHARE_WORK) { // Share work
+        //     share_work(m, s);
+        //     loop_counter = 0;
+        //     continue;
+        // }
 
-        Node* top = pop(&s);
+        Node* top = pop(s);
         a = top->a;
         b = top->b;
+        to_free = (Sumset*) a;
         
         if (a->sum > b->sum) {
             tmp = a;
             a = b;
             b = tmp;
         }
-        
+
+        // fprintf(stderr, "Address of a: %p\n", a);
+        // fprintf(stderr, "Address of b: %p\n", b);
+        print_sumsets(a, b);
+
         if (is_sumset_intersection_trivial(a, b)) {
-            
-            if (loop_counter == ITERS_TO_SHARE_WORK) { // share work
-                // TODO
-
-
-
-                loop_counter = 0;
-            } else { // normal business
-                Wrapper* wrapper = init_wrapper(0, a, top->wrapper);
-                int elems = 0;
-                for (size_t i = input_data->d; i >= a->last; --i)
+            Wrapper* wrapper = (a == &input_data->a_start || a == &input_data->b_start) ? NULL : init_wrapper(1, a, top->wrapper);
+            int elems = 0;
+            for (size_t i = input_data->d; i >= a->last; --i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
                     Sumset* new_sumset = (Sumset*) malloc(sizeof(Sumset));
@@ -81,30 +80,33 @@ void* worker(void* args) {
 
                     sumset_add(new_sumset, a, i);
                     Data data = (Data) {.a = new_sumset, .b = b, .wrapper = wrapper};
-                    push(&s, &data);
+                    push(s, &data);
                 }
 
-                if (elems == 0) {
+            if (elems == 0) {
                 // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
                 printf("YES THIS BRANCH EXECUTES\n");
-                // free(a);
-                // dealloc_wrapper(top->wrapper);
-                } else {
-                    set_counter(wrapper, elems);
-                }
+                free(to_free);
+                try_dealloc_wrapper(wrapper);
+            } else {
+                set_counter(wrapper, elems);
             }
         }
         else {
             // The branch is finished
             if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
                 solution_build(best_solution, input_data, a, b);
-            
+
             // Dealloc current a and wrapper
-            free(a);
-            dealloc_wrapper(top->wrapper);
+            free(to_free);
+            try_dealloc_wrapper(top->wrapper);
         }
 
+        free(top);
     } while (!(*done)); // Monitor will indicate that the whole work is done
 
     LOG("Worker DONE\n");
+    return 0;
 }
+
+#endif

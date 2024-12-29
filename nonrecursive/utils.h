@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <stdio.h>
 #include "common/sumset.h"
 
@@ -49,3 +52,5 @@ void print_sumsets(const Sumset* a, const Sumset* b) {
     print_sumset(b);
     fprintf(stderr, "\n");
 }
+
+#endif

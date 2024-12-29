@@ -1,3 +1,6 @@
+#ifndef STACK_H
+#define STACK_H
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -85,3 +88,5 @@ void stack_init(Stack* s) {
     s->head = NULL;
     s->size = 0;
 }
+
+#endif
