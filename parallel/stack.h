@@ -6,15 +6,16 @@
 #include "common/sumset.h"
 #include "utils.h"
 
-typedef enum NodeType {
-    SUMSET,
-    REMOVAL,
-    SWAP
-} NodeType;
+typedef struct Data {
+    Sumset* a;
+    Sumset* b;
+    Wrapper* wrapper;
+} Data;
 
 typedef struct Node {
-    const Sumset* set;
-    NodeType type;
+    Sumset* a;
+    Sumset* b;
+    Wrapper* wrapper;
     struct Node* prev;
 } Node;
 
@@ -23,12 +24,13 @@ typedef struct Stack {
     size_t size;
 } Stack;
 
-Node* init_node(Sumset* set, NodeType type, Node* prev) {
+Node* init_node(Data* data, Node* prev) {
     Node* n = (Node*) malloc(sizeof(Node));
     ASSERT_MALLOC_SUCCEEDED(n);
 
-    n->set = set;
-    n->type = type;
+    n->a = data->a;
+    n->b = data->b;
+    n->wrapper = data->wrapper;
     n->prev = prev;
 
     return n;
@@ -44,36 +46,23 @@ Node* top(Stack* s) {
     return s->head;
 }
 
-void push(Stack* s, Sumset* set, NodeType type) {
+void push(Stack* s, Data* data) {
     if (!s)
         return;
-    Node* n = init_node(set, type, s->head);
+    Node* n = init_node(data, s->head);
     s->size++;
     s->head = n;
 }
 
-// Pop with no return values, probaly leaks memory
-void pop(Stack* s) {
+// Remember to free the node
+Node* pop(Stack* s) {
     if (empty(s)) 
-        return;
-    
-    Node* tmp = s->head;
+        return NULL;
+
+    Node* RES = s->head;
     s->head = s->head->prev;
     s->size--;
-    free(tmp);
-}
-
-// Result value in res
-void pop_ret(Stack* s, const Sumset** res, NodeType* type) {
-    if (empty(s)) 
-        return;
-    if (s->head->set)
-        *res = s->head->set;
-    if (s->head->type == REMOVAL)
-        assert(*res == s->head->set);
-    
-    *type = s->head->type;
-    pop(s);
+    return RES;
 }
 
 void stack_dealloc(Stack* s) {

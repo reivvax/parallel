@@ -8,8 +8,13 @@ void monitor_init(Monitor* m, int d) {
     m->waiting_for_nodes = 0;
     m->using_stack = 0;
     m->signalling = false;
+    m->done = false;
 }
 
 void take_args(Monitor* m, Stack* dest) {
     
 }
+
+// void give_args() {
+
+// }
