@@ -26,18 +26,22 @@ void* worker(void* args) {
     // unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    // Monitor* m = unpacked_args->m;
+    Monitor* m = unpacked_args->m;
+    pthread_mutex_t* wrapper_mutex = &m->wrapper_mutex;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
     bool* done = unpacked_args->done;
     
-    uint16_t loop_counter = 0;
-    
+    uint32_t loop_counter = 0;
+
     const Sumset* a;
+    Wrapper* w_a;
+
     const Sumset* b;
+    Wrapper* w_b;
+
     const Sumset* tmp;
-    Sumset* to_free;
 
     do {
         LOG("Iteration: %d", loop_counter);
@@ -55,9 +59,10 @@ void* worker(void* args) {
         // }
 
         Node* top = pop(s);
-        a = top->a;
-        b = top->b;
-        to_free = (Sumset*) a;
+        w_a = top->a;
+        w_b = top->b;
+        a = &w_a->set;
+        b = &w_b->set;
         
         if (a->sum > b->sum) {
             tmp = a;
@@ -70,26 +75,29 @@ void* worker(void* args) {
         print_sumsets(a, b);
 
         if (is_sumset_intersection_trivial(a, b)) {
-            Wrapper* wrapper = (a == &input_data->a_start || a == &input_data->b_start) ? NULL : init_wrapper(1, a, top->wrapper);
             int elems = 0;
             for (size_t i = input_data->d; i >= a->last; --i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
-                    Sumset* new_sumset = (Sumset*) malloc(sizeof(Sumset));
-                    ASSERT_MALLOC_SUCCEEDED(new_sumset);
 
-                    sumset_add(new_sumset, a, i);
-                    Data data = (Data) {.a = new_sumset, .b = b, .wrapper = wrapper};
-                    push(s, &data);
+                    Wrapper* new_wrapper = init_wrapper(1, w_a);
+                    ASSERT_MALLOC_SUCCEEDED(new_wrapper);
+
+                    sumset_add(&new_wrapper->set, a, i);
+                    Data data = (Data) {.a = new_wrapper, .b = w_b};
+                    push(&s, &data);
                 }
 
             if (elems == 0) {
                 // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
                 printf("YES THIS BRANCH EXECUTES\n");
-                free(to_free);
-                try_dealloc_wrapper(wrapper);
+                decrement_ref_counter(w_a);
+                decrement_ref_counter(w_b);
+                try_dealloc_wrapper(w_a, wrapper_mutex);
+                try_dealloc_wrapper(w_b, wrapper_mutex);
             } else {
-                set_counter(wrapper, elems);
+                increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+                increment_ref_counter_n(w_b, elems - 1);
             }
         }
         else {
@@ -98,8 +106,8 @@ void* worker(void* args) {
                 solution_build(best_solution, input_data, a, b);
 
             // Dealloc current a and wrapper
-            free(to_free);
-            try_dealloc_wrapper(top->wrapper);
+            try_dealloc_wrapper_with_decrement(w_a, wrapper_mutex); // decrement, as we popped from the stack
+            try_dealloc_wrapper_with_decrement(w_b, wrapper_mutex);
         }
 
         free(top);

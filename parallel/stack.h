@@ -11,15 +11,13 @@
 #include "wrapper.h"
 
 typedef struct Data {
-    const Sumset* a;
-    const Sumset* b;
-    Wrapper* wrapper;
+    Wrapper* a;
+    Wrapper* b;
 } Data;
 
 typedef struct Node {
-    const Sumset* a;
-    const Sumset* b;
-    Wrapper* wrapper;
+    Wrapper* a;
+    Wrapper* b;
     struct Node* prev;
 } Node;
 
@@ -34,7 +32,6 @@ Node* init_node(Data* data, Node* prev) {
 
     n->a = data->a;
     n->b = data->b;
-    n->wrapper = data->wrapper;
     n->prev = prev;
 
     return n;

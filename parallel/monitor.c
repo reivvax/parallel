@@ -6,6 +6,7 @@ void monitor_init(Monitor* m, int d) {
     m->d = d;
     stack_init(&m->s);
     ASSERT_ZERO(pthread_mutex_init(&m->mutex, NULL));
+    ASSERT_ZERO(pthread_mutex_init(&m->wrapper_mutex, NULL));
     ASSERT_ZERO(pthread_cond_init(&m->wait_for_work, NULL));
     m->waiting_for_work = 0;
     m->using_stack = 0;
