@@ -37,7 +37,9 @@
         }                                                                      \
     } while (0)
 
-void print_sumset(const Sumset* a) {
+#define MAX(A, B) ((A) > (B) ? (A) : (B))
+
+static void print_sumset(const Sumset* a) {
     if (!a)
         return;
     while (a->prev) {
@@ -47,7 +49,7 @@ void print_sumset(const Sumset* a) {
     fprintf(stderr, "\n");
 }
 
-void print_sumsets(const Sumset* a, const Sumset* b) {
+static void print_sumsets(const Sumset* a, const Sumset* b) {
     print_sumset(a);
     fprintf(stderr, "\t\t");
     print_sumset(b);

@@ -4,9 +4,11 @@
 #include "stack.h"
 #include "monitor.h"
 
-#define ITERS_TO_SHARE_WORK 64
+#define ITERS_TO_SHARE_WORK 128
+#define STACK_SIZE_TO_SHARE_WORK 64
 
 typedef struct WorkerArgs {
+    int id;
     Monitor* m;
     InputData* input_data;
     Solution* best_solution;
@@ -14,7 +16,8 @@ typedef struct WorkerArgs {
     bool* done;                  // Indicator whether the whole computation is done
 } WorkerArgs;
 
-void args_init(WorkerArgs* args, Monitor* m, InputData* input_data, Solution* best_solution) {
+void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data, Solution* best_solution) {
+    args->id = id;
     args->m = m;
     args->input_data = input_data;
     args->best_solution = best_solution;
@@ -26,14 +29,15 @@ void* worker(void* args) {
     // Unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    // Monitor* m = unpacked_args->m;
-    // pthread_mutex_t* wrapper_mutex = &m->wrapper_mutex;
+    int id = unpacked_args->id;
+    Monitor* m = unpacked_args->m;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
     bool* done = unpacked_args->done;
     
     uint32_t loop_counter = 0;
+    uint32_t total_counter = 0;
 
     const Sumset* a;
     Wrapper* w_a;
@@ -42,22 +46,21 @@ void* worker(void* args) {
     Wrapper* w_b;
 
     Wrapper* tmp;
-
     do {
-        LOG("Iteration: %d", loop_counter);
-        if (empty(s)) {
-            // TODO, ASK THE MONITOR
-            return 0;
+        if (empty(s)) { // We are out of nodes, ask the monitor for more
+            take_work(m, s, id);
             loop_counter = 0; // IS IT NECCESARRY? (PROBABLY YES)
+            continue;
         }
 
         loop_counter++;
-        
-        // if (loop_counter++ >= ITERS_TO_SHARE_WORK) { // Share work
-        //     // share_work(m, s);
-        //     loop_counter = 0;
-        //     continue;
-        // }
+        total_counter++;
+
+        if (loop_counter++ >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK) { // Share work
+            share_work(m, s, id);
+            loop_counter = 0;
+            continue;
+        }
 
         Node* top = pop(s);
         w_a = top->a;
@@ -85,7 +88,6 @@ void* worker(void* args) {
                     Data data = (Data) {.a = new_wrapper, .b = w_b};
                     push(s, &data);
                 }
-
             if (elems == 0) {
                 // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
                 fprintf(stderr, "YES THIS BRANCH EXECUTES\n");
@@ -106,9 +108,10 @@ void* worker(void* args) {
         }
 
         free(top);
-    } while (!(*done)); // Monitor will indicate that the whole work is done
+    } while (!(*done)); // Monitor will indicate that the whole work is done, 
+    // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
 
-    LOG("Worker DONE\n");
+    LOG("%d: Worker DONE, loops: %d", id, total_counter);
     return 0;
 }
 

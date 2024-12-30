@@ -26,7 +26,7 @@ typedef struct Stack {
     size_t size;
 } Stack;
 
-Node* init_node(Data* data, Node* prev) {
+static Node* init_node(Data* data, Node* prev) {
     Node* n = (Node*) malloc(sizeof(Node));
     ASSERT_MALLOC_SUCCEEDED(n);
 
@@ -37,21 +37,31 @@ Node* init_node(Data* data, Node* prev) {
     return n;
 }
 
-bool empty(Stack* s) {
+static bool empty(Stack* s) {
     return s->head == NULL;
 }
 
-size_t size(Stack* s) {
+static size_t size(Stack* s) {
     return s->size;
 }
 
-Node* top(Stack* s) {
+static Node* top(Stack* s) {
     if (!s)
         return NULL;
     return s->head;
 }
 
-void push(Stack* s, Data* data) {
+static void swap_stacks(Stack* a, Stack* b) {
+    Node* tmp_n = a->head;
+    a->head = b->head;
+    b->head = tmp_n;
+
+    size_t tmp_s = a->size;
+    a->size = b->size;
+    b->size = tmp_s;
+}
+
+static void push(Stack* s, Data* data) {
     if (!s)
         return;
     Node* n = init_node(data, s->head);
@@ -60,7 +70,7 @@ void push(Stack* s, Data* data) {
 }
 
 // Remember to free the node
-Node* pop(Stack* s) {
+static Node* pop(Stack* s) {
     if (empty(s)) 
         return NULL;
 
@@ -73,72 +83,63 @@ Node* pop(Stack* s) {
 /**
  * @brief Pushes all the nodes from `top` to `last` on `s` in O(1) time. `top` becomes `s->head`.
  */
-void push_n(Stack* s, Node* top, Node* last, int n) {
+static void push_n(Stack* s, Node* top, Node* last, int n) {
     last->prev = s->head;
     s->head = top;
     s->size += n;
 }
 
-// Returns the n-th node from the top. If n = 1, returns head. If n > s->size, returns NULL
-Node* get_nth(Stack* s, int n) {
-    if (!s || n < 1 || n > s->size)
+// Returns the n-th node from the top in O(n). If n = 1, returns head. If n > s->size, returns last element.
+static Node* get_nth(Stack* s, int n) {
+    if (!s || empty(s) || n < 1)
         return NULL;
 
     Node* res = s->head;
-    while (--n)
+    while (--n && res->prev)
         res = res->prev;
 
     return res;
 }
 
 /**
- * @brief Splits the stack where `n` is placed. `n` must be inside the provided stack, 
- * otherwise, the stack is being replaced
+ * @brief Splits the stack where `n` is placed in O(1). `n` must be inside the provided stack, 
+ * otherwise, the stack is being replaced.
  *  
  * @return Top of the provided stack
  */ 
-Node* detach(Stack* s, Node* n, int size_of_detached) {
+static Node* detach(Stack* s, Node* n, int size_of_detached) {
     if (!s)
         return NULL;
 
     Node* res = top(s);
-    
-    s->head = n->prev;
+
+    s->head = n ? n->prev : NULL;
     s->size -= size_of_detached;
 
     return res;
 }
 
 /**
- * @brief Splits the stack so that detached stack is of size `n`. 
- * If `n > s->size` then the resulting stack becomes `s` and `s` becomes empty, 
- *  
- * @return Top of the provided stack
- */ 
-Node* detach_n(Stack* s, int n) {
-    if (!s)
-        return NULL;
-
-    Node* res = top(s);
-    Node* cut = get_nth(s, n);
-
-    if (n >= s->size) {
-        s->size = 0;
-        s->head = NULL;
-    } else {
-        s->size -= n;
-        s->head = cut->prev;
+ * @brief Takes `n` elements from `src` and pushes them to `dst` in O(n), the order of nodes is preserved. 
+ */
+static void rearrange_n(Stack* src, Stack* dst, int n) {
+    if (n == 0)
+        return;
+    if (src->size < n && empty(dst))
+        swap_stacks(src, dst);
+    else {
+        Node* last = get_nth(src, n);
+        Node* top = detach(src, last, n);
+        push_n(dst, top, last, n);
     }
-
-    return res;
 }
 
-void stack_dealloc(Stack* s) {
+static void stack_dealloc(Stack* s) {
     while (!empty(s)) 
         pop(s);
 }
 
-void stack_init(Stack* s) {
+static void stack_init(Stack* s) {
     s->head = NULL;
     s->size = 0;
 }

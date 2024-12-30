@@ -6,7 +6,7 @@
 #include "worker.h"
 
 #define MAX_THREADS 64
-#define STACK_FILLING_FACTOR 2
+#define STACK_FILLING_FACTOR 6
 
 void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
@@ -96,17 +96,17 @@ int main()
 {
     InputData input_data;
     // input_data_read(&input_data);
-    input_data_init(&input_data, 1, 4, (int[]){0}, (int[]){1, 0});
+    input_data_init(&input_data, 3, 20, (int[]){0}, (int[]){1, 0});
 
     Solution best_solution;
     solution_init(&best_solution);
 
     Monitor m;
-    // monitor_init(&m, input_data.d);
+    monitor_init(&m, input_data.t, input_data.d);
 
     WorkerArgs args[input_data.t]; 
     for (int i = 0; i < input_data.t; ++i)
-        args_init(args + i, &m, &input_data, &best_solution);
+        args_init(args + i, i, &m, &input_data, &best_solution);
 
     Wrapper initial_wrappers[2];
 
