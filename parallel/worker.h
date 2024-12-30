@@ -10,8 +10,8 @@ typedef struct WorkerArgs {
     Monitor* m;
     InputData* input_data;
     Solution* best_solution;
-    Stack s;                     // initial stack for worker
-    bool* done;                  // indicator whether the whole computation is done
+    Stack s;                     // Initial stack for worker
+    bool* done;                  // Indicator whether the whole computation is done
 } WorkerArgs;
 
 void args_init(WorkerArgs* args, Monitor* m, InputData* input_data, Solution* best_solution) {
@@ -23,11 +23,11 @@ void args_init(WorkerArgs* args, Monitor* m, InputData* input_data, Solution* be
 }
 
 void* worker(void* args) {
-    // unpack arguments
+    // Unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    Monitor* m = unpacked_args->m;
-    pthread_mutex_t* wrapper_mutex = &m->wrapper_mutex;
+    // Monitor* m = unpacked_args->m;
+    // pthread_mutex_t* wrapper_mutex = &m->wrapper_mutex;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
@@ -41,19 +41,20 @@ void* worker(void* args) {
     const Sumset* b;
     Wrapper* w_b;
 
-    const Sumset* tmp;
+    Wrapper* tmp;
 
     do {
         LOG("Iteration: %d", loop_counter);
         if (empty(s)) {
             // TODO, ASK THE MONITOR
-            LOG("FINISHED");
             return 0;
-            loop_counter = 0; // IS IT NECCESARRY? (YES (MAYBE NOT))
+            loop_counter = 0; // IS IT NECCESARRY? (PROBABLY YES)
         }
+
         loop_counter++;
+        
         // if (loop_counter++ >= ITERS_TO_SHARE_WORK) { // Share work
-        //     share_work(m, s);
+        //     // share_work(m, s);
         //     loop_counter = 0;
         //     continue;
         // }
@@ -61,18 +62,15 @@ void* worker(void* args) {
         Node* top = pop(s);
         w_a = top->a;
         w_b = top->b;
-        a = &w_a->set;
-        b = &w_b->set;
         
-        if (a->sum > b->sum) {
-            tmp = a;
-            a = b;
-            b = tmp;
+        if (w_a->set.sum > w_b->set.sum) {
+            tmp = w_a;
+            w_a = w_b;
+            w_b = tmp;
         }
 
-        // fprintf(stderr, "Address of a: %p\n", a);
-        // fprintf(stderr, "Address of b: %p\n", b);
-        print_sumsets(a, b);
+        a = &w_a->set;
+        b = &w_b->set;
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
@@ -85,16 +83,14 @@ void* worker(void* args) {
 
                     sumset_add(&new_wrapper->set, a, i);
                     Data data = (Data) {.a = new_wrapper, .b = w_b};
-                    push(&s, &data);
+                    push(s, &data);
                 }
 
             if (elems == 0) {
                 // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
-                printf("YES THIS BRANCH EXECUTES\n");
-                decrement_ref_counter(w_a);
-                decrement_ref_counter(w_b);
-                try_dealloc_wrapper(w_a, wrapper_mutex);
-                try_dealloc_wrapper(w_b, wrapper_mutex);
+                fprintf(stderr, "YES THIS BRANCH EXECUTES\n");
+                try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                try_dealloc_wrapper_with_decrement(w_b);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -105,9 +101,8 @@ void* worker(void* args) {
             if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
                 solution_build(best_solution, input_data, a, b);
 
-            // Dealloc current a and wrapper
-            try_dealloc_wrapper_with_decrement(w_a, wrapper_mutex); // decrement, as we popped from the stack
-            try_dealloc_wrapper_with_decrement(w_b, wrapper_mutex);
+            try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+            try_dealloc_wrapper_with_decrement(w_b);
         }
 
         free(top);

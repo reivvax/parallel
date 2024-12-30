@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "common/sumset.h"
 
-// #define NDEBUG 1
+#define NDEBUG 1
 
 #ifndef NDEBUG
 #define LOG(...)                                                                                \
@@ -44,13 +44,13 @@ void print_sumset(const Sumset* a) {
         fprintf(stderr, "%d ", a->last);
         a = a->prev;
     }
+    fprintf(stderr, "\n");
 }
 
 void print_sumsets(const Sumset* a, const Sumset* b) {
     print_sumset(a);
     fprintf(stderr, "\t\t");
     print_sumset(b);
-    fprintf(stderr, "\n");
 }
 
 #endif

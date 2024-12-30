@@ -31,7 +31,7 @@ void share_work(Monitor* m, Stack* s) {
     // Distribute the rest over waiting workers
     // Other possible approaches:
     // - Always give away half of the stack
-    // - Always give away constant number of nodes 
+    // - Always give away constant number of nodes
     
     int leave = m->waiting_for_work == 0 ? 
                 (s->size + 1) / 2 : (s->size + m->waiting_for_work - 1) / m->waiting_for_work; // ceiling

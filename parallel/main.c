@@ -8,24 +8,24 @@
 #define MAX_THREADS 64
 #define STACK_FILLING_FACTOR 2
 
-void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], pthread_mutex_t* wrapper_mutex, InputData* input_data, Solution* best_solution, int threads_count) {
+void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
     stack_init(&s);
 
     const Sumset* a;
     a = &input_data->a_start;
-    initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX, .set = *a, .prev = NULL};
+    initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *a, .prev = NULL};
     Wrapper* w_a = initial_wrappers;
     
     const Sumset* b;
     b = &input_data->b_start;
-    initial_wrappers[1] = (Wrapper) {.ref_counter = ULLONG_MAX, .set = *b, .prev = NULL};
-    Wrapper* w_b = initial_wrappers;
+    initial_wrappers[1] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *b, .prev = NULL};
+    Wrapper* w_b = initial_wrappers + 1;
 
-    const Sumset* tmp;
+    Wrapper* tmp;
 
     Data data = (Data) {.a = w_a, .b = w_b};
-    push(&s, &data); // first element
+    push(&s, &data); // First element
     
     // Basically the 'worker' code
     do {
@@ -35,14 +35,15 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], pthread_mutex_t*
         Node* top = pop(&s);
         w_a = top->a;
         w_b = top->b;
+        
+        if (w_a->set.sum > w_b->set.sum) {
+            tmp = w_a;
+            w_a = w_b;
+            w_b = tmp;
+        }
+
         a = &w_a->set;
         b = &w_b->set;
-
-        if (a->sum > b->sum) {
-            tmp = a;
-            a = b;
-            b = tmp;
-        }
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
@@ -59,11 +60,9 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], pthread_mutex_t*
                 }
             
             if (elems == 0) {
-                printf("YES THIS BRANCH EXECUTES\n");
-                decrement_ref_counter(w_a);
-                decrement_ref_counter(w_b);
-                try_dealloc_wrapper(w_a, wrapper_mutex);
-                try_dealloc_wrapper(w_b, wrapper_mutex);
+                fprintf(stderr, "YES THIS BRANCH EXECUTES\n");
+                try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                try_dealloc_wrapper_with_decrement(w_b);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -74,12 +73,12 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], pthread_mutex_t*
             if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
                 solution_build(best_solution, input_data, a, b);
             
-            try_dealloc_wrapper_with_decrement(w_a, wrapper_mutex); // decrement, as we popped from the stack
-            try_dealloc_wrapper_with_decrement(w_b, wrapper_mutex);
+            try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+            try_dealloc_wrapper_with_decrement(w_b);
         }
 
         free(top);
-    } while (size(&s) < STACK_FILLING_FACTOR * threads_count); 
+    } while (size(&s) < STACK_FILLING_FACTOR * threads_count);
     // Assure that every thread will have at least `STACK_FILLING_FACTOR` elements on its stack
 
     int current_stack = 0;
@@ -105,15 +104,15 @@ int main()
     Monitor m;
     // monitor_init(&m, input_data.d);
 
-    WorkerArgs args[MAX_THREADS]; 
+    WorkerArgs args[input_data.t]; 
     for (int i = 0; i < input_data.t; ++i)
         args_init(args + i, &m, &input_data, &best_solution);
 
     Wrapper initial_wrappers[2];
 
-    fill_stacks(args, initial_wrappers, &m.wrapper_mutex, &input_data, &best_solution, input_data.t);
-    printf("STACKS FILLED\n");
-    pthread_t threads[MAX_THREADS];
+    fill_stacks(args, initial_wrappers, &input_data, &best_solution, input_data.t);
+
+    pthread_t threads[input_data.t];
 
     for (int i = 0; i < input_data.t; ++i)
         pthread_create(threads + i, NULL, worker, args + i);
