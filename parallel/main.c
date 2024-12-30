@@ -95,8 +95,8 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
 int main()
 {
     InputData input_data;
-    // input_data_read(&input_data);
-    input_data_init(&input_data, 3, 20, (int[]){0}, (int[]){1, 0});
+    input_data_read(&input_data);
+    // input_data_init(&input_data, 8, 20, (int[]){0}, (int[]){1, 0});
 
     Solution best_solution;
     solution_init(&best_solution);

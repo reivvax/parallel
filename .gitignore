@@ -1,2 +1,5 @@
 build
 .clang*
+.vscode
+*.out
+*.diff
