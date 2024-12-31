@@ -5,7 +5,7 @@
 #include "monitor.h"
 
 #define ITERS_TO_SHARE_WORK 128
-#define STACK_SIZE_TO_SHARE_WORK 64
+#define STACK_SIZE_TO_SHARE_WORK 32
 
 typedef struct WorkerArgs {
     int id;
@@ -34,6 +34,7 @@ void* worker(void* args) {
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
+    _Atomic bool* collective_stack_empty = &m->empty;
     bool* done = unpacked_args->done;
     
     uint32_t loop_counter = 0;
@@ -57,7 +58,7 @@ void* worker(void* args) {
         loop_counter++;
         total_counter++;
 
-        if (loop_counter++ >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK) { // Share work
+        if (loop_counter++ >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
             share_work(m, s, id);
             loop_counter = 0;
             continue;
@@ -78,7 +79,8 @@ void* worker(void* args) {
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            for (size_t i = a->last; i <= input_data->d; ++i)
+            for (size_t i = input_data->d; i >= a->last; --i)
+            // for (size_t i = a->last; i <= input_data->d; ++i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
 

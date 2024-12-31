@@ -102,6 +102,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
 
 int main()
 {
+    LOG("START");
     InputData input_data;
     input_data_read(&input_data);
     // input_data_init(&input_data, 8, 20, (int[]){0}, (int[]){1, 0});
@@ -130,24 +131,6 @@ int main()
         for (int i = 0; i < input_data.t; ++i) // wait for threads
             ASSERT_ZERO(pthread_join(threads[i], NULL));
     }
-
-    // int best_sum = best_solution.sum;
-    // for (int i = 0; i < input_data.t; ++i)
-    //     if (best_sum < args[i].best_solution.sum)
-    //         best_sum = args[i].best_solution.sum;
-    
-    
-    // Solution* res[input_data.t + 1];
-    // int amount = 0;
-    // if (best_solution.sum == best_sum)
-    //     res[amount++] = &best_solution;
-
-    // for (int i = 0; i < input_data.t; ++i)
-    //     if (args[i].best_solution.sum == best_sum)
-    //         res[amount++] = &args[i].best_solution;
-
-    // for (int i = 0; i < amount; ++i)
-    //     solution_print(res[i]);
 
     Solution* res = &best_solution;
     for (int i = 0; i < input_data.t; ++i)

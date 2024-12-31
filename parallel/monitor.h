@@ -11,6 +11,7 @@ typedef struct Monitor {
     int t;                          // t parameter from input_data
     int d;                          // d parameter from input_data
     Stack s;                        // collective stack
+    _Atomic bool empty;             // indicator whether collective stack is empty
     pthread_mutex_t mutex;
     pthread_cond_t give_work;       // who is giving work
     pthread_cond_t wait_for_work;   // who is waiting
