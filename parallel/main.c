@@ -5,8 +5,7 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define MAX_THREADS 64
-#define STACK_FILLING_FACTOR 6
+#define STACK_FILLING_FACTOR 10
 
 void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
@@ -60,7 +59,7 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
                 }
             
             if (elems == 0) {
-                fprintf(stderr, "YES THIS BRANCH EXECUTES\n");
+                fprintf(stderr, "YES THIS BRANCH EXECUTES FROM MAIN\n");
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
             } else {
@@ -106,7 +105,7 @@ int main()
 
     WorkerArgs args[input_data.t]; 
     for (int i = 0; i < input_data.t; ++i)
-        args_init(args + i, i, &m, &input_data, &best_solution);
+        args_init(args + i, i, &m, &input_data);
 
     Wrapper initial_wrappers[2];
 
@@ -120,6 +119,11 @@ int main()
     for (int i = 0; i < input_data.t; ++i) // wait for threads
         ASSERT_ZERO(pthread_join(threads[i], NULL));
 
-    solution_print(&best_solution);
+    Solution* res = &best_solution;
+    for (int i = 0; i < input_data.t; ++i)
+        if (res->sum < args[i].best_solution.sum)
+            res = &args[i].best_solution;
+    
+    solution_print(res);
     return 0;
 }

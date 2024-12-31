@@ -49,8 +49,8 @@ void take_work(Monitor* m, Stack* dst, int id) {
         if (!empty(&m->s)) {
             LOG("%d: HERE COMES ANOTHER SLEEPER", id);
             m->signalling = true;
-        } else if (m->waiting_to_give_work > 1) {
-            LOG("%d: WAKING ANOTHER GIVER", id);
+        } else if (m->waiting_to_give_work > 0) {
+            LOG("%d: WAKING ANOTHER GIVER FROM TAKING", id);
             m->signalling = true;
             ASSERT_ZERO(pthread_cond_broadcast(&m->give_work));
         }
@@ -76,7 +76,6 @@ void share_work(Monitor* m, Stack* src, int id) {
         ASSERT_ZERO(pthread_cond_wait(&m->give_work, &m->mutex));
         m->signalling = false;
     }
-
     m->waiting_to_give_work--;
     // Here lies the logic of sharing work between threads
     // For now, take the number of currently waiting threads 'waiting_for_work'
@@ -94,14 +93,15 @@ void share_work(Monitor* m, Stack* src, int id) {
     assert(leave == src->size);
     // MORE LOGIC?
     m->signalling = true;
-    if (m->waiting_to_give_work > 0) {
-        LOG("%d: WAKING ANOTHER GIVER", id);
-    }
     if (m->waiting_for_work > 0) {
         update_work_amount(m);
         LOG("%d: SHARED WORK WAKING ANOTHER TAKER, COUNT = %d, SRC_SIZE = %ld, MONITOR_STACK_SIZE = %ld, WAITING = %d, WORK_AMOUNT = %d", id, count, src->size, m->s.size, m->waiting_for_work, m->work_amount);
         ASSERT_ZERO(pthread_cond_broadcast(&m->wait_for_work));
+    } else if (m->waiting_to_give_work > 0) {
+        LOG("%d: WAKING ANOTHER GIVER FROM SHARE", id);
+        ASSERT_ZERO(pthread_cond_broadcast(&m->give_work));
     } else
         m->signalling = false;
+
     ASSERT_ZERO(pthread_mutex_unlock(&m->mutex));
 }

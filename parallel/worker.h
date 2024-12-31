@@ -11,16 +11,16 @@ typedef struct WorkerArgs {
     int id;
     Monitor* m;
     InputData* input_data;
-    Solution* best_solution;
+    Solution best_solution;
     Stack s;                     // Initial stack for worker
     bool* done;                  // Indicator whether the whole computation is done
 } WorkerArgs;
 
-void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data, Solution* best_solution) {
+void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data) {
     args->id = id;
     args->m = m;
     args->input_data = input_data;
-    args->best_solution = best_solution;
+    solution_init(&args->best_solution);
     stack_init(&args->s);
     args->done = &m->done;
 }
@@ -32,7 +32,7 @@ void* worker(void* args) {
     int id = unpacked_args->id;
     Monitor* m = unpacked_args->m;
     InputData* input_data = unpacked_args->input_data;
-    Solution* best_solution = unpacked_args->best_solution;
+    Solution* best_solution = &unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
     bool* done = unpacked_args->done;
     
@@ -90,7 +90,7 @@ void* worker(void* args) {
                 }
             if (elems == 0) {
                 // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
-                fprintf(stderr, "YES THIS BRANCH EXECUTES\n");
+                fprintf(stderr, "YES THIS BRANCH EXECUTES FROM WORKER\n");
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
             } else {

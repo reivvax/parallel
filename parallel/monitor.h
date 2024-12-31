@@ -14,9 +14,9 @@ typedef struct Monitor {
     pthread_mutex_t mutex;
     pthread_cond_t give_work;       // who is giving work
     pthread_cond_t wait_for_work;   // who is waiting
-    uint8_t waiting_to_give_work;            // how much of them
+    uint8_t waiting_to_give_work;   // how much of them
     uint8_t waiting_for_work;       // how much of them
-    uint8_t work_amount;            // how much work can be taken from collective stack at the moment
+    int work_amount;                // how much work can be taken from collective stack at the moment
     bool signalling;                // is the monitor signalling condition
     bool done;                      // indicator whether the whole computation is done
 } Monitor;
