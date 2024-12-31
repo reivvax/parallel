@@ -18,19 +18,10 @@ for test_file in "$TEST_DIR"/test_*.in; do
     "$NONRECURSIVE" < $test_file > nonrecursive.out
     "$PARALLEL" < $test_file > parallel.out
 
-    # if diff -q reference.out nonrecursive.out > /dev/null; then
-    #     echo -e "Test $counter: ${GREEN}PASS${NC}"
-    # else
-    #     echo -e "Test $counter: NONRECURSIVE ${RED}FAIL${NC}"
-    #     echo "Output Differs:"
-    #     diff reference.out nonrecursive.out
-    #     exit 1
-    # fi
-
     if diff -q reference.out nonrecursive.out > /dev/null && diff -q reference.out parallel.out > /dev/null; then
-        echo -e "Test $counter: ${GREEN}PASS${NC}"
+        echo -e "Test $counter: \t${GREEN}PASS${NC}"
     else
-        echo -e "Test $counter: ${RED}FAIL${NC}"
+        echo -e "Test $counter: \t${RED}FAIL${NC}"
         if ! diff -q reference.out nonrecursive.out > nonrecursive.diff; then
             echo "NONRECURSIVE Output Differs"
         fi
