@@ -39,6 +39,7 @@ void* worker(void* args) {
     uint32_t loop_counter = 0;
     uint32_t total_counter = 0;
 
+    size_t max_size = 0;
     const Sumset* a;
     Wrapper* w_a;
 
@@ -77,7 +78,7 @@ void* worker(void* args) {
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            for (size_t i = input_data->d; i >= a->last; --i)
+            for (size_t i = a->last; i <= input_data->d; ++i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
 
@@ -89,8 +90,6 @@ void* worker(void* args) {
                     push(s, &data);
                 }
             if (elems == 0) {
-                // DOES THIS BRANCH EVEN EXECUTE ANYTIME? CHECK IT, FOR NOW LEAVE IT
-                fprintf(stderr, "YES THIS BRANCH EXECUTES FROM WORKER\n");
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
             } else {
@@ -107,11 +106,14 @@ void* worker(void* args) {
             try_dealloc_wrapper_with_decrement(w_b);
         }
 
+        if (size(s) > max_size)
+            max_size = size(s);
+
         free(top);
     } while (!(*done)); // Monitor will indicate that the whole work is done, 
     // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
 
-    LOG("%d: Worker DONE, loops: %d", id, total_counter);
+    LOG("%d: Worker DONE, loops: %d, max stack size: %ld", id, total_counter, max_size);
     return 0;
 }
 

@@ -34,7 +34,7 @@ static void try_dealloc_wrapper_with_decrement(Wrapper* w) {
     if (!w)
         return;
     
-    if (atomic_fetch_sub_explicit(&w->ref_counter, 1, memory_order_acq_rel) == 1) {
+    if (atomic_fetch_sub_explicit(&w->ref_counter, 1, memory_order_seq_cst) == 1) {
         Wrapper* prev = w->prev;
         free(w);
         try_dealloc_wrapper_with_decrement(prev);

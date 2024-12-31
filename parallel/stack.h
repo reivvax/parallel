@@ -127,6 +127,8 @@ static void rearrange_n(Stack* src, Stack* dst, int n) {
     if (src->size < n && empty(dst))
         swap_stacks(src, dst);
     else {
+        if (src->size < n)
+            n = src->size;
         Node* last = get_nth(src, n);
         Node* top = detach(src, last, n);
         push_n(dst, top, last, n);

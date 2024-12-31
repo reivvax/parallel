@@ -5,9 +5,9 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define STACK_FILLING_FACTOR 10
+#define STACK_FILLING_FACTOR 2
 
-void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
+bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
     stack_init(&s);
 
@@ -25,12 +25,17 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
 
     Data data = (Data) {.a = w_a, .b = w_b};
     push(&s, &data); // First element
-    
+    size_t max_size = 0;
+    int loop_counter = 0;
+
     // Basically the 'worker' code
     do {
-        if (empty(&s))
-            return; // WE ARE DONE...? SOMEHOW
+        if (empty(&s)) {
+            // LOG("MAIN MAX SIZE: %ld, MAIN LOOPS: %d", max_size, loop_counter);
+            return true; // We are already done
+        }   
 
+        loop_counter++;
         Node* top = pop(&s);
         w_a = top->a;
         w_b = top->b;
@@ -46,7 +51,7 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            for (size_t i = a->last; i <= input_data->d; ++i)
+            for (size_t i = input_data->d; i >= a->last; --i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
 
@@ -59,7 +64,6 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
                 }
             
             if (elems == 0) {
-                fprintf(stderr, "YES THIS BRANCH EXECUTES FROM MAIN\n");
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
             } else {
@@ -77,9 +81,12 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
         }
 
         free(top);
+        if (size(&s) > max_size)
+            max_size = size(&s);
     } while (size(&s) < STACK_FILLING_FACTOR * threads_count);
     // Assure that every thread will have at least `STACK_FILLING_FACTOR` elements on its stack
-
+    
+    // LOG("MAIN MAX SIZE: %ld, MAIN LOOPS: %d", max_size, loop_counter);
     int current_stack = 0;
 
     // OPTIONALLY REDISTRIBUTE THOSE NODES IN MORE REASONABLE MANNER
@@ -89,6 +96,8 @@ void fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
         push(&args[current_stack].s, &data);
         current_stack = (current_stack + 1) % threads_count;
     }
+
+    return false;
 }
 
 int main()
@@ -109,15 +118,36 @@ int main()
 
     Wrapper initial_wrappers[2];
 
-    fill_stacks(args, initial_wrappers, &input_data, &best_solution, input_data.t);
+    bool done = fill_stacks(args, initial_wrappers, &input_data, &best_solution, input_data.t);
 
-    pthread_t threads[input_data.t];
+    if (!done) {
+        LOG("STARTING THREADS");
+        pthread_t threads[input_data.t];
 
-    for (int i = 0; i < input_data.t; ++i)
-        pthread_create(threads + i, NULL, worker, args + i);
+        for (int i = 0; i < input_data.t; ++i)
+            pthread_create(threads + i, NULL, worker, args + i);
 
-    for (int i = 0; i < input_data.t; ++i) // wait for threads
-        ASSERT_ZERO(pthread_join(threads[i], NULL));
+        for (int i = 0; i < input_data.t; ++i) // wait for threads
+            ASSERT_ZERO(pthread_join(threads[i], NULL));
+    }
+
+    // int best_sum = best_solution.sum;
+    // for (int i = 0; i < input_data.t; ++i)
+    //     if (best_sum < args[i].best_solution.sum)
+    //         best_sum = args[i].best_solution.sum;
+    
+    
+    // Solution* res[input_data.t + 1];
+    // int amount = 0;
+    // if (best_solution.sum == best_sum)
+    //     res[amount++] = &best_solution;
+
+    // for (int i = 0; i < input_data.t; ++i)
+    //     if (args[i].best_solution.sum == best_sum)
+    //         res[amount++] = &args[i].best_solution;
+
+    // for (int i = 0; i < amount; ++i)
+    //     solution_print(res[i]);
 
     Solution* res = &best_solution;
     for (int i = 0; i < input_data.t; ++i)
