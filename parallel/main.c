@@ -56,7 +56,6 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
                     elems++;
 
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
-                    ASSERT_MALLOC_SUCCEEDED(new_wrapper);
 
                     sumset_add(&new_wrapper->set, a, i);
                     Data data = (Data) {.a = new_wrapper, .b = w_b};
@@ -95,6 +94,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
         Data data = (Data) {.a = top->a, .b = top->b};
         push(&args[current_stack].s, &data);
         current_stack = (current_stack + 1) % threads_count;
+        free(top);
     }
 
     return false;

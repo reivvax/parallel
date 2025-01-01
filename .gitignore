@@ -1,4 +1,5 @@
 build
+d_build
 .clang*
 .vscode
 *.out

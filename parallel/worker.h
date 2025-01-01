@@ -51,14 +51,14 @@ void* worker(void* args) {
     do {
         if (empty(s)) { // We are out of nodes, ask the monitor for more
             take_work(m, s, id);
-            loop_counter = 0; // IS IT NECCESARRY? (PROBABLY YES)
+            loop_counter = 0;
             continue;
         }
 
         loop_counter++;
         total_counter++;
 
-        if (loop_counter++ >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
+        if (size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
             share_work(m, s, id);
             loop_counter = 0;
             continue;
@@ -79,13 +79,12 @@ void* worker(void* args) {
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            for (size_t i = input_data->d; i >= a->last; --i)
-            // for (size_t i = a->last; i <= input_data->d; ++i)
+            // for (size_t i = input_data->d; i >= a->last; --i)
+            for (size_t i = a->last; i <= input_data->d; ++i)
                 if (!does_sumset_contain(b, i)) {
                     elems++;
 
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
-                    ASSERT_MALLOC_SUCCEEDED(new_wrapper);
 
                     sumset_add(&new_wrapper->set, a, i);
                     Data data = (Data) {.a = new_wrapper, .b = w_b};

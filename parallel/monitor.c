@@ -2,7 +2,6 @@
 #include <assert.h>
 
 #define MONITOR_THRESHOLD 32
-#define CONST_GIVEAWAY 16
 
 void monitor_init(Monitor* m, int t, int d) {
     m->t = t;
@@ -64,7 +63,7 @@ void take_work(Monitor* m, Stack* dst, int id) {
         // If m->s.size > MONITOR_THRESHOLD, take m->s.size / 2 elements, else take m->s.size
         LOG("%d: MONITOR STACK SIZE BEFORE ( no sleep ): %ld", id, m->s.size);
         if (m->s.size > MONITOR_THRESHOLD)
-            rearrange_n(&m->s, dst, 3 * m->s.size / 4);
+            rearrange_n(&m->s, dst, (2 * m->s.size) / 3);
         else {
             rearrange_n(&m->s, dst, m->s.size);
             m->empty = true;
@@ -95,19 +94,18 @@ void share_work(Monitor* m, Stack* src, int id) {
     // - Always give away half of the stack
     // - Always give away constant number of nodes
 
-    int count = CONST_GIVEAWAY;
+    int count = (src->size + 1) / 2;
 
     if (m->waiting_for_work == 0) {
         rearrange_n(src, &m->s, count);
         m->empty = false;
     } else {
-        int workers = MAX(m->waiting_for_work, 1) + 1; // Count yourself, so +1
+        int workers = m->waiting_for_work + 1; // Count yourself, so +1
         int leave = (src->size + workers - 1) / workers; // Ceiling
         count = src->size - leave;
 
         rearrange_n(src, &m->s, count);
-        if (!empty(&m->s))
-            m->empty = false;
+        m->empty = empty(&m->s);
     
         assert(leave == src->size);
     }
