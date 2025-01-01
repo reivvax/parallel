@@ -10,6 +10,9 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 NC="\033[0m"
 
+T_VALUES=(1 2 4 8 16 32 64)
+D_VALUES=(5 10 15 20 25 30 32 34)
+
 counter=1
 
 for test_file in "$TEST_DIR"/test_*.in; do

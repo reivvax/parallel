@@ -4,3 +4,5 @@ d_build
 .vscode
 *.out
 *.diff
+*.log
+*.val
