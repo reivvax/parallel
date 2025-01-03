@@ -16,7 +16,7 @@ NC="\033[0m"
 OUTPUT_TO_FILE=false
 BRIEF_MODE=false
 RUN_REFERENCE=false
-T_LIMIT=5
+T_LIMIT=2
 
 # Args
 while [[ $# -gt 0 ]]; do
@@ -55,12 +55,22 @@ if (( T_LIMIT > 6 )); then
 fi
 
 # D_VALUES=(5 10 15 20 25 30 32 34)
-D_VALUES=(5 10 15 20)
+D_VALUES=(5 10)
 
 
 current_t=0
+THREADS_COUNT=1
 
 for d in $D_VALUES; do # Iteration over d parameter
+
+    if [ "$RUN_REFERENCE" = "true" ]; then
+        start=$(date +%s%N)
+        reference_output=$( (echo "1 $d 0 1 1" | $REFERENCE > /dev/null) 2>&1 )
+        end=$(date +%s%N)
+        reference_real_time=$(((end - start) / 1000000)) # Miliseconds
+    else
+        echo -e "${BOLD}NOT IMPLEMENTED${NC}"
+    fi
 
     while true; do # Iteration over t parameter
 
@@ -68,38 +78,27 @@ for d in $D_VALUES; do # Iteration over d parameter
             break
         fi
 
-        THREADS_COUNT=$(( 2 ** current_t ))
 
         if [ "$BRIEF_MODE" = "true" ]; then
             echo -e "${BOLD}NOT IMPLEMENTED${NC}"
         else
-            
-            if [ "$RUN_REFERENCE" = "true" ]; then
-                echo -e "${BOLD}NOT IMPLEMENTED${NC}"
-            else
-                # here run the program witch such command:
-                # time -f'<SOME FSTRING TO GET REAL TIME IN SECONDS> echo 1 $d 0 1 1 | $REFERENCE > (SOME VARIABLE)
-                reference_output=$( (time -f\'%e\' echo "1 $d 0 1 1" | $REFERENCE) 2>&1 )
-                reference_real_time=$(echo "$reference_output" | awk '{print $1}')
+            parallel_output=$( { echo "$THREADS_COUNT $d 0 1 1" | time -f'%e %U' $PARALLEL; } 2>&1 )
+            # parallel_real_time=$(echo "$parallel_output" | grep real | awk '{print $2}')
+            # parallel_user_time=$(echo "$parallel_output" | grep user | awk '{print $2}')
+            parallel_real_time=$(echo "$parallel_output" | awk '{print $1}')
+            parallel_user_time=$(echo "$parallel_output" | awk '{print $2}')
+            cpu_utilization=$(echo "$parallel_user_time / ($parallel_real_time * $THREADS_COUNT)" | bc -l)
 
-                # time -f'<SOME FSTRING TO GET REAL TIME AND USER TIME IN SECONDS> echo $THREADS_COUNT $d 0 1 1 | $PARALLEL > (SOME VARIABLE)
-                parallel_output=$( { time echo "$THREADS_COUNT $d 0 1 1" | $PARALLEL; } 2>&1 )
-                parallel_real_time=$(echo "$parallel_output" | grep real | awk '{print $2}')                
-                parallel_user_time=$(echo "$parallel_output" | grep user | awk '{print $2}')
-                
-                cpu_utilization=$(echo "$parallel_user_time / ($parallel_real_time * $THREADS_COUNT)" | bc -l)
+            parallelization_factor=$(echo "$reference_real_time / $parallel_real_time" | bc -l)
 
-                parallelization_factor=$(echo "$reference_real_time / $parallel_real_time" | bc -l)
-
-
-                echo -e "For d=$d and THREADS_COUNT=$THREADS_COUNT:"
-                echo -e "  Reference Real Time: $reference_real_time seconds"
-                echo -e "  Parallel Real Time: $parallel_real_time seconds"
-                echo -e "  CPU Utilization: $cpu_utilization"
-                echo -e "  Parallelization Factor: $parallelization_factor"
-            fi
+            echo -e "For d=$d and THREADS_COUNT=$THREADS_COUNT:"
+            echo -e "  Reference Real Time: $reference_real_time seconds"
+            echo -e "  Parallel Real Time: $parallel_real_time seconds"
+            echo -e "  Parallelization Factor: $parallelization_factor"
+            echo -e "  CPU Utilization: $cpu_utilization"
         fi
 
+        THREADS_COUNT=$(( 2 * THREADS_COUNT ))
         current_t=$((current_t+1))
     done
 done

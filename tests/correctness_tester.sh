@@ -1,5 +1,4 @@
 #!/bin/bash
-# set -x
 
 REFERENCE=$(realpath "../build/reference/reference")
 NONRECURSIVE=$(realpath "../build/nonrecursive/nonrecursive")
