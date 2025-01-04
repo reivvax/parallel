@@ -5,7 +5,6 @@ NONRECURSIVE=$(realpath "../build/nonrecursive/nonrecursive")
 PARALLEL=$(realpath "../build/parallel/parallel")
 
 TEST_DIR="./tests"
-OUTPUT_DIR="./time_output"
 
 BOLD="\033[1m"
 GREEN="\033[0;32m"
