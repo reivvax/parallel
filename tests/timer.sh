@@ -13,7 +13,6 @@ RED="\033[0;31m"
 YELLOW="\033[0;33m"
 NC="\033[0m"
 
-OUTPUT_TO_FILE=false
 BRIEF_MODE=false
 RUN_REFERENCE=false
 T_LIMIT=5
@@ -22,10 +21,6 @@ D_LIMIT=8
 # Args
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -f|--file)
-            OUTPUT_TO_FILE=true
-            shift
-            ;;
         -b|--brief)
             BRIEF_MODE=true
             shift
@@ -59,13 +54,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if (( T_LIMIT > 6 )); then
-    echo -e "${YELLOW}Warning: Running with limit = 6${NC}"
-    T_LIMIT=6
+if (( T_LIMIT > 7 )); then
+    echo -e "${YELLOW}Warning: Running with threads_limit = 7${NC}"
+    T_LIMIT=7
 fi
 
 if (( D_LIMIT > 8 )); then
-    echo -e "${YELLOW}Warning: Running with limit = 8${NC}"
+    echo -e "${YELLOW}Warning: Running with d_limit = 8${NC}"
     D_LIMIT=8
 fi
 
@@ -77,14 +72,18 @@ if [ "$RUN_REFERENCE" = "false" ]; then
     elif command -v py &>/dev/null; then
         PYTHON_CMD=py
     else
-        echo "Python not found." >&2
+        echo -e "${RED}Python not found.${NC}" >&2
         exit 1
     fi
 fi
 
 D_VALUES=(5 10 15 20 25 30 32 34)
 
-D_VALUES=("${D_VALUES[@]:0:$D_LIMIT}")
+D_VALUES=("${D_VALUES[@]:0:$D_LIMIT}") # Crop
+
+if [ "$BRIEF_MODE" = "true" ]; then
+    echo "d,t,reference_real_time,parallel_real_time,parallelization_factor"
+fi
 
 for d in ${D_VALUES[@]}; do # Iteration over d parameter
 
@@ -123,21 +122,29 @@ for d in ${D_VALUES[@]}; do # Iteration over d parameter
             parallel_user_time="0.001" # Avoid division by zero, may happen for d = 5
         fi
         parallelization_factor=$(echo "scale=4; $reference_real_time / $parallel_real_time" | bc -l)
+        if [[ $parallelization_factor == .* ]]; then
+            parallelization_factor="0$parallelization_factor" # Ensure trailing zero before a comma
+        fi
+        
 
         if [ "$BRIEF_MODE" = "true" ]; then
-            echo -e "$d, $THREADS_COUNT, $reference_real_time, $parallel_real_time, $parallelization_factor"
+            echo -e "$d,$THREADS_COUNT,$reference_real_time,$parallel_real_time,$parallelization_factor"
         else
             cpu_utilization=$(echo "scale=4; $parallel_user_time / ($parallel_real_time * $THREADS_COUNT)" | bc -l)
-
-            echo -e "d=$d, t=$THREADS_COUNT:"
-            echo -e "\tReference Real Time: $reference_real_time seconds"
-            echo -e "\tParallel Real Time: $parallel_real_time seconds"
-            echo -e "\tParallelization Factor: $parallelization_factor"
-            if [ "$NEGLIGIBLE" = "false" ]; then
-                echo -e "\tCPU Utilization: $cpu_utilization"
-            else
-                echo -e "\tCPU Utilization: negligible"
+            if [[ $cpu_utilization == .* ]]; then
+                cpu_utilization="0$cpu_utilization"
             fi
+        
+            echo -e "d=$d, t=$THREADS_COUNT:"
+            echo -e "\tReference real time:\t$reference_real_time seconds"
+            echo -e "\tParallel real time:\t$parallel_real_time seconds"
+            echo -e "\tParallelization factor:\t$parallelization_factor"
+            
+            if [ "$NEGLIGIBLE" = "true" ]; then
+                cpu_utilization="NEGLIGIBLE"
+            fi
+
+            echo -e "\tCPU utilization:\t$cpu_utilization"
         fi
 
         NEGLIGIBLE="false"
@@ -145,5 +152,3 @@ for d in ${D_VALUES[@]}; do # Iteration over d parameter
         CURRENT_T=$((CURRENT_T+1))
     done
 done
-
-rm -f *.out
