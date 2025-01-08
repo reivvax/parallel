@@ -39,9 +39,6 @@ void solve(InputData* input_data, Solution* best_solution) {
                     LOG("SWAP");
                     push(&s, NULL, SWAP);
                 }
-                // printf("a address: %p\n", a);
-                // printf("b address: %p\n", b);
-                // print_sumsets(a, b);
                 
                 if (is_sumset_intersection_trivial(a, b)) {
                     int elems = 0;

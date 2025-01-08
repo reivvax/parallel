@@ -4,8 +4,6 @@ REFERENCE=$(realpath "../build/reference/reference")
 NONRECURSIVE=$(realpath "../build/nonrecursive/nonrecursive")
 PARALLEL=$(realpath "../build/parallel/parallel")
 
-TEST_DIR="./tests"
-
 BOLD="\033[1m"
 GREEN="\033[0;32m"
 RED="\033[0;31m"
@@ -16,6 +14,8 @@ BRIEF_MODE=false
 RUN_REFERENCE=false
 T_LIMIT=5
 D_LIMIT=8
+
+SUBSTITION_VALUE="0.001"
 
 # Args
 while [[ $# -gt 0 ]]; do
@@ -92,7 +92,7 @@ for d in ${D_VALUES[@]}; do # Iteration over d parameter
     if [ "$RUN_REFERENCE" = "true" ]; then
         reference_real_time=$( (echo "1 $d 0 1 1" | time -f'%e' $REFERENCE > /dev/null) 2>&1 )
         if [ $reference_real_time = "0.00" ]; then
-            reference_real_time="0.001" # Avoid division by zero, may happen for d = 5
+            reference_real_time=$SUBSTITION_VALUE # Avoid division by zero, may happen for d = 5
         fi
     else
         reference_real_time=$( $PYTHON_CMD reference_times.py $d )
@@ -112,13 +112,13 @@ for d in ${D_VALUES[@]}; do # Iteration over d parameter
         parallel_real_time=$(echo "$parallel_output" | awk '{print $1}')
         if [ $parallel_real_time = "0.00" ]; then
             NEGLIGIBLE="true"
-            parallel_real_time="0.001" # Avoid division by zero, may happen for d = 5
+            parallel_real_time=$SUBSTITION_VALUE # Avoid division by zero, may happen for d = 5
         fi
 
         parallel_user_time=$(echo "$parallel_output" | awk '{print $2}')
         if [ $parallel_user_time = "0.00" ]; then
             NEGLIGIBLE="true"
-            parallel_user_time="0.001" # Avoid division by zero, may happen for d = 5
+            parallel_user_time=$SUBSTITION_VALUE # Avoid division by zero, may happen for d = 5
         fi
         parallelization_factor=$(echo "scale=4; $reference_real_time / $parallel_real_time" | bc -l)
         if [[ $parallelization_factor == .* ]]; then
