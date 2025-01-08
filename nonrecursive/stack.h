@@ -9,19 +9,14 @@
 #include "utils.h"
 #include "wrapper.h"
 
-typedef struct Data {
-    Wrapper* a;
-    Wrapper* b;
-} Data;
-
 typedef struct Node {
-    Wrapper* a;
-    Wrapper* b;
+    WrapperNode* a;
+    WrapperNode* b;
 } Node;
 
 typedef struct Stack {
     size_t size;
-    struct Node buffer[1000];
+    struct Node buffer[2000];
 } Stack;
 
 static bool empty(Stack* s) {
@@ -32,7 +27,7 @@ static size_t size(Stack* s) {
     return s->size;
 }
 
-static void push(Stack* s, Wrapper* a, Wrapper* b) {
+static void push(Stack* s, WrapperNode* a, WrapperNode* b) {
     if (!s)
         return;
     
@@ -42,7 +37,7 @@ static void push(Stack* s, Wrapper* a, Wrapper* b) {
 }
 
 // Remember to free the node
-static void pop(Stack* s, Wrapper** a, Wrapper** b) {
+static void pop(Stack* s, WrapperNode** a, WrapperNode** b) {
     if (empty(s)) 
         return;
 
