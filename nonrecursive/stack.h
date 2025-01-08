@@ -1,92 +1,54 @@
 #ifndef STACK_H
 #define STACK_H
 
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
 
 #include "common/sumset.h"
 #include "utils.h"
+#include "wrapper.h"
 
-typedef enum NodeType {
-    SUMSET,
-    REMOVAL,
-    SWAP
-} NodeType;
+typedef struct Data {
+    Wrapper* a;
+    Wrapper* b;
+} Data;
 
 typedef struct Node {
-    const Sumset* set;
-    NodeType type;
-    struct Node* prev;
+    Wrapper* a;
+    Wrapper* b;
 } Node;
 
 typedef struct Stack {
-    struct Node* head;
     size_t size;
+    struct Node buffer[1000];
 } Stack;
 
-Node* init_node(Sumset* set, NodeType type, Node* prev) {
-    Node* n = (Node*) malloc(sizeof(Node));
-    ASSERT_MALLOC_SUCCEEDED(n);
-
-    n->set = set;
-    n->type = type;
-    n->prev = prev;
-
-    return n;
+static bool empty(Stack* s) {
+    return s->size == 0;
 }
 
-bool empty(Stack* s) {
-    return s->head == NULL;
+static size_t size(Stack* s) {
+    return s->size;
 }
 
-Node* top(Stack* s) {
-    if (!s)
-        return NULL;
-    return s->head;
-}
-
-void push(Stack* s, Sumset* set, NodeType type) {
+static void push(Stack* s, Wrapper* a, Wrapper* b) {
     if (!s)
         return;
-    Node* n = init_node(set, type, s->head);
+    
+    s->buffer[s->size].a = a;
+    s->buffer[s->size].b = b;
     s->size++;
-    s->head = n;
 }
 
-// Pop with no return values, probaly leaks memory
-void pop(Stack* s) {
+// Remember to free the node
+static void pop(Stack* s, Wrapper** a, Wrapper** b) {
     if (empty(s)) 
         return;
-    
-    Node* tmp = s->head;
-    s->head = s->head->prev;
+
     s->size--;
-    free(tmp);
-}
-
-// Result value in res
-void pop_ret(Stack* s, const Sumset** res, NodeType* type) {
-    if (empty(s)) 
-        return;
-    if (s->head->set)
-        *res = s->head->set;
-    if (s->head->type == REMOVAL)
-        assert(*res == s->head->set);
-    
-    *type = s->head->type;
-    pop(s);
-}
-
-void stack_dealloc(Stack* s) {
-    while (!empty(s)) 
-        pop(s);
-}
-
-void stack_init(Stack* s) {
-    s->head = NULL;
-    s->size = 0;
+    *a = s->buffer[s->size].a;
+    *b = s->buffer[s->size].b;
 }
 
 #endif

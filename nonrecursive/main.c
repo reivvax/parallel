@@ -4,63 +4,70 @@
 #include "stack.h"
 
 void solve(InputData* input_data, Solution* best_solution) {
+    Stack s = {0};
+
     const Sumset* a;
-    a = &input_data->a_start;
+    Wrapper* w_a = init_wrapper(1, NULL);
+    w_a->set = input_data->a_start;
+    a = &w_a->set;
+
     const Sumset* b;
-    b = &input_data->b_start;
-    const Sumset* tmp;
-    NodeType current_type = SUMSET;
-    Stack s;
-    stack_init(&s);
+    Wrapper* w_b = init_wrapper(1, NULL);
+    w_b->set = input_data->b_start;
+    b = &w_b->set;
+
+    Wrapper* tmp;
+
+    push(&s, w_a, w_b); // First element
+    size_t max_size = 0;
+    size_t wrappers = 2;
 
     do {
-        pop_ret(&s, &a, &current_type); // current a
-        switch (current_type) {
-            case REMOVAL:
-                LOG("POP REMOVAL");
-                tmp = a;
-                a = a->prev;
-                free((Sumset*)tmp);
-                break;
-
-            case SWAP:
-                LOG("UNSWAP");
-                tmp = a;
-                a = b;
-                b = tmp;
-                break;
-
-            case SUMSET:
-                LOG("POP SUMSET");
-                if (a->sum > b->sum) {
-                    tmp = a;
-                    a = b;
-                    b = tmp;
-                    LOG("SWAP");
-                    push(&s, NULL, SWAP);
-                }
-                
-                if (is_sumset_intersection_trivial(a, b)) {
-                    int elems = 0;
-                    for (size_t i = input_data->d; i >= a->last; --i)
-                        if (!does_sumset_contain(b, i)) {
-                            elems++;
-                            Sumset* new_sumset = (Sumset*) malloc(sizeof(Sumset));
-                            ASSERT_MALLOC_SUCCEEDED(new_sumset);
-                            sumset_add(new_sumset, a, i);
-                            push(&s, new_sumset, REMOVAL); // indicator to free new_sumset
-                            push(&s, new_sumset, SUMSET);
-                        }
-                    LOG("PUSHED %d X REMOVAL / SUMET", elems);
-                }
-                else if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2) {
-                    LOG("END OF BRANCH");
-                    if (a->sum > best_solution->sum)
-                        solution_build(best_solution, input_data, a, b);
-                }
+        pop(&s, &w_a, &w_b);
+        
+        if (w_a->set.sum > w_b->set.sum) {
+            tmp = w_a;
+            w_a = w_b;
+            w_b = tmp;
         }
-    } while (!empty(&s));
 
+        a = &w_a->set;
+        b = &w_b->set;
+
+        if (is_sumset_intersection_trivial(a, b)) {
+            int elems = 0;
+            for (size_t i = a->last; i <= input_data->d; ++i)
+                if (!does_sumset_contain(b, i)) {
+                    elems++;
+                    wrappers++;
+                    Wrapper* new_wrapper = init_wrapper(1, w_a);
+
+                    sumset_add(&new_wrapper->set, a, i);
+                    push(&s, new_wrapper, w_b);
+                }
+            
+            if (elems == 0) {
+                try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                try_dealloc_wrapper_with_decrement(w_b);
+            } else {
+                increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+                increment_ref_counter_n(w_b, elems - 1);
+            }
+        }
+        else {
+            // The branch is finished
+            if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
+                solution_build(best_solution, input_data, a, b);
+            
+            try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+            try_dealloc_wrapper_with_decrement(w_b);
+        }
+
+        if (size(&s) > max_size)
+            max_size = size(&s);
+    } while (!empty(&s));
+    LOG("WRAPPERS ALLOCATED: %ld", wrappers);
+    LOG("MAX STACK_SIZE: %ld", max_size);
     LOG("DONE\n");
 }
 

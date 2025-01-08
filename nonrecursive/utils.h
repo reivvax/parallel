@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "common/sumset.h"
 
-#define NDEBUG 1
+// #define NDEBUG 1
 
 #ifndef NDEBUG
 #define LOG(...)                                                                                \
