@@ -7,20 +7,17 @@
 
 #define STACK_FILLING_FACTOR 3
 
-bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
+bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
     stack_init(&s);
 
     const Sumset* a;
-    a = &input_data->a_start;
-    initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *a, .prev = NULL};
-    Wrapper* w_a = initial_wrappers;
-    
-    const Sumset* b;
-    b = &input_data->b_start;
-    initial_wrappers[1] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *b, .prev = NULL};
-    Wrapper* w_b = initial_wrappers + 1;
+    a = &w_a->set;
+    // initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *a, .prev = NULL};
 
+    const Sumset* b;
+    b = &w_b->set;
+    
     Wrapper* tmp;
 
     Data data = (Data) {.a = w_a, .b = w_b};
@@ -29,10 +26,9 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
 
     // Basically the 'worker' code
     do {
-        if (empty(&s)) {
+        if (empty(&s))
             return true; // We are already done
-        }   
-        
+
         Node* top = pop(&s);
         w_a = top->a;
         w_b = top->b;
@@ -113,12 +109,14 @@ int main()
     for (int i = 0; i < input_data.t; ++i)
         args_init(args + i, i, &m, &input_data);
 
-    Wrapper initial_wrappers[2];
+    Wrapper* w_a = init_wrapper(1, NULL);
+    w_a->set = input_data.a_start;
+    Wrapper* w_b = init_wrapper(1, NULL);
+    w_b->set = input_data.b_start;
 
-    bool done = fill_stacks(args, initial_wrappers, &input_data, &best_solution, input_data.t);
+    bool done = fill_stacks(args, w_a, w_b, &input_data, &best_solution, input_data.t);
 
     if (!done) {
-        LOG("STARTING THREADS");
         pthread_t threads[input_data.t];
 
         for (int i = 0; i < input_data.t; ++i)
