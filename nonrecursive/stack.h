@@ -21,7 +21,7 @@ typedef struct Node {
 
 typedef struct Stack {
     size_t size;
-    struct Node buffer[1000];
+    struct Node buffer[2000];
 } Stack;
 
 static bool empty(Stack* s) {
@@ -41,7 +41,6 @@ static void push(Stack* s, Wrapper* a, Wrapper* b) {
     s->size++;
 }
 
-// Remember to free the node
 static void pop(Stack* s, Wrapper** a, Wrapper** b) {
     if (empty(s)) 
         return;
