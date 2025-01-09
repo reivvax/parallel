@@ -5,7 +5,7 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define STACK_FILLING_FACTOR 2
+#define STACK_FILLING_FACTOR 3
 
 bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
@@ -26,16 +26,13 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
     Data data = (Data) {.a = w_a, .b = w_b};
     push(&s, &data); // First element
     size_t max_size = 0;
-    int loop_counter = 0;
 
     // Basically the 'worker' code
     do {
         if (empty(&s)) {
-            // LOG("MAIN MAX SIZE: %ld, MAIN LOOPS: %d", max_size, loop_counter);
             return true; // We are already done
         }   
-
-        loop_counter++;
+        
         Node* top = pop(&s);
         w_a = top->a;
         w_b = top->b;
@@ -84,8 +81,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper initial_wrappers[], InputData* input
             max_size = size(&s);
     } while (size(&s) < STACK_FILLING_FACTOR * threads_count);
     // Assure that every thread will have at least `STACK_FILLING_FACTOR` elements on its stack
-    
-    // LOG("MAIN MAX SIZE: %ld, MAIN LOOPS: %d", max_size, loop_counter);
+
     int current_stack = 0;
 
     // OPTIONALLY REDISTRIBUTE THOSE NODES IN MORE REASONABLE MANNER
