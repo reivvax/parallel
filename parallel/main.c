@@ -13,15 +13,13 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
 
     const Sumset* a;
     a = &w_a->set;
-    // initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *a, .prev = NULL};
 
     const Sumset* b;
     b = &w_b->set;
     
     Wrapper* tmp;
 
-    Data data = (Data) {.a = w_a, .b = w_b};
-    push(&s, &data); // First element
+    push(&s, w_a, w_b); // First element
     size_t max_size = 0;
 
     // Basically the 'worker' code
@@ -51,8 +49,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
 
                     sumset_add(&new_wrapper->set, a, i);
-                    Data data = (Data) {.a = new_wrapper, .b = w_b};
-                    push(&s, &data);
+                    push(&s, new_wrapper, w_b);
                 }
             
             if (elems == 0) {
@@ -83,8 +80,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
     // OPTIONALLY REDISTRIBUTE THOSE NODES IN MORE REASONABLE MANNER
     while (!empty(&s)) {
         Node* top = pop(&s);
-        Data data = (Data) {.a = top->a, .b = top->b};
-        push(&args[current_stack].s, &data);
+        push(&args[current_stack].s, top->a, top->b);
         current_stack = (current_stack + 1) % threads_count;
         free(top);
     }

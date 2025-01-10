@@ -4,8 +4,9 @@
 #include "stack.h"
 #include "monitor.h"
 
-#define ITERS_TO_SHARE_WORK 128
-#define STACK_SIZE_TO_SHARE_WORK 32
+#define ITERS_TO_SHARE_WORK 256 // 2^8
+#define MAX_MONITOR_SIZE 256
+#define STACK_SIZE_TO_SHARE_WORK 10
 
 typedef struct WorkerArgs {
     int id;
@@ -34,7 +35,7 @@ void* worker(void* args) {
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
-    _Atomic bool* collective_stack_empty = &m->empty;
+    // _Atomic bool* collective_stack_empty = &m->empty;
     bool* done = unpacked_args->done;
     
     uint32_t loop_counter = 0;
@@ -58,15 +59,16 @@ void* worker(void* args) {
         loop_counter++;
         total_counter++;
 
-        if (size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
-            share_work(m, s, id);
-            loop_counter = 0;
-            continue;
-        }
+        // int monitor_stack_size = m->stack_size;
+        // if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && monitor_stack_size < MAX_MONITOR_SIZE) { // Share work
+        //     share_work(m, s, id);
+        //     loop_counter = 0;
+        //     continue;
+        // }
 
-        Node* top = pop(s);
-        w_a = top->a;
-        w_b = top->b;
+        Node* n_top = pop(s);
+        w_a = n_top->a;
+        w_b = n_top->b;
         
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
@@ -78,25 +80,75 @@ void* worker(void* args) {
         b = &w_b->set;
 
         if (is_sumset_intersection_trivial(a, b)) {
-            int elems = 0;
-            // for (size_t i = input_data->d; i >= a->last; --i)
-            for (size_t i = a->last; i <= input_data->d; ++i)
-                if (!does_sumset_contain(b, i)) {
-                    elems++;
+            int monitor_stack_size = m->stack_size;
+            if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && monitor_stack_size < MAX_MONITOR_SIZE) { // share this branch
+                Stack temp_s;
+                stack_init(&temp_s);
+                Node* temp_top;
+                Node* temp_bottom;
+                int elems = 0;
+                // for (size_t i = input_data->d; i >= a->last; --i)
+                for (size_t i = a->last; i <= input_data->d; ++i)
+                    if (!does_sumset_contain(b, i)) {
+                        elems++;
 
-                    Wrapper* new_wrapper = init_wrapper(1, w_a);
+                        Wrapper* new_wrapper = init_wrapper(1, w_a);
 
-                    sumset_add(&new_wrapper->set, a, i);
-                    Data data = (Data) {.a = new_wrapper, .b = w_b};
-                    push(s, &data);
+                        sumset_add(&new_wrapper->set, a, i);
+                        push(s, new_wrapper, w_b);
+                        if (elems == 1)
+                            temp_bottom = top(&temp_s);
+                    }
+                temp_top = top(&temp_s);
+                if (elems == 0) {
+                    try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                    try_dealloc_wrapper_with_decrement(w_b);
+                } else {
+                    share_work(m, temp_top, temp_bottom, elems, id);
+                    increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+                    increment_ref_counter_n(w_b, elems - 1);
                 }
-            if (elems == 0) {
-                try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
-                try_dealloc_wrapper_with_decrement(w_b);
+                loop_counter = 0;
             } else {
-                increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
-                increment_ref_counter_n(w_b, elems - 1);
+               int elems = 0;
+                // for (size_t i = input_data->d; i >= a->last; --i)
+                for (size_t i = a->last; i <= input_data->d; ++i)
+                    if (!does_sumset_contain(b, i)) {
+                        elems++;
+
+                        Wrapper* new_wrapper = init_wrapper(1, w_a);
+
+                        sumset_add(&new_wrapper->set, a, i);
+                        push(s, new_wrapper, w_b);
+                    }
+                if (elems == 0) {
+                    try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                    try_dealloc_wrapper_with_decrement(w_b);
+                } else {
+                    increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+                    increment_ref_counter_n(w_b, elems - 1);
+                } 
             }
+            
+            // int elems = 0;
+            // // for (size_t i = input_data->d; i >= a->last; --i)
+            // for (size_t i = a->last; i <= input_data->d; ++i)
+            //     if (!does_sumset_contain(b, i)) {
+            //         elems++;
+
+            //         Wrapper* new_wrapper = init_wrapper(1, w_a);
+
+            //         sumset_add(&new_wrapper->set, a, i);
+            //         Data data = (Data) {.a = new_wrapper, .b = w_b};
+            //         push(s, &data);
+            //     }
+            // if (elems == 0) {
+            //     try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+            //     try_dealloc_wrapper_with_decrement(w_b);
+            // } else {
+            //     increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+            //     increment_ref_counter_n(w_b, elems - 1);
+            // }
         }
         else {
             // The branch is finished
@@ -110,7 +162,7 @@ void* worker(void* args) {
         if (size(s) > max_size)
             max_size = size(s);
 
-        free(top);
+        free(n_top);
     } while (!(*done)); // Monitor will indicate that the whole work is done, 
     // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
 
