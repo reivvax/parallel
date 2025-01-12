@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "common/sumset.h"
 #include "utils.h"
 #include "wrapper.h"
 

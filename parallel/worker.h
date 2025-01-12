@@ -1,47 +1,55 @@
 #ifndef WORKER_H
 #define WORKER_H
 
-#include "stack.h"
-#include "monitor.h"
+#include <pthread.h>
 
-#define ITERS_TO_SHARE_WORK 256 // 2^8
-#define MAX_MONITOR_SIZE 256
-#define STACK_SIZE_TO_SHARE_WORK 10
+#include "lock_free_stack.h"
+
+// #define ITERS_TO_SHARE_WORK 256 // 2^8
+// #define MAX_MONITOR_SIZE 256
+// #define STACK_SIZE_TO_SHARE_WORK 10
 
 typedef struct WorkerArgs {
     int id;
-    Monitor* m;
+    _Atomic LockFreeStack* s;               // One collective stack
+    pthread_cond_t* wait_for_work;
+    pthread_mutex_t* mutex;
+    int* waiting_for_work;
+    bool* done;
     InputData* input_data;
     Solution best_solution;
-    Stack s;                     // Initial stack for worker
-    bool* done;                  // Indicator whether the whole computation is done
 } WorkerArgs;
 
-void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data) {
+void args_init(WorkerArgs* args, int id, _Atomic LockFreeStack* s, pthread_cond_t* wait_for_work, pthread_mutex_t* mutex, int* waiting_for_work, bool* done, InputData* input_data) {
     args->id = id;
-    args->m = m;
+    args->s = s;
+    args->wait_for_work = wait_for_work;
+    args->mutex = mutex;
+    args->waiting_for_work = waiting_for_work;
+    args->done = done;
     args->input_data = input_data;
     solution_init(&args->best_solution);
-    stack_init(&args->s);
-    args->done = &m->done;
 }
 
 void* worker(void* args) {
     // Unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    int id = unpacked_args->id;
-    Monitor* m = unpacked_args->m;
+    // int id = unpacked_args->id;
+    
+    // Synchronization arguments
+    _Atomic LockFreeStack* s = unpacked_args->s;
+    pthread_cond_t* wait_for_work = unpacked_args->wait_for_work;
+    pthread_mutex_t* mutex = unpacked_args->mutex;
+    int* waiting_for_work = unpacked_args->waiting_for_work;
+    bool* done = unpacked_args->done;
+
+    // Data arguments
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
-    Stack* s = &unpacked_args->s;
-    // _Atomic bool* collective_stack_empty = &m->empty;
-    bool* done = unpacked_args->done;
-    
-    uint32_t loop_counter = 0;
-    uint32_t total_counter = 0;
 
-    size_t max_size = 0;
+    uint64_t total_counter = 0;
+
     const Sumset* a;
     Wrapper* w_a;
 
@@ -50,26 +58,29 @@ void* worker(void* args) {
 
     Wrapper* tmp;
     do {
-        if (empty(s)) { // We are out of nodes, ask the monitor for more
-            take_work(m, s, id);
-            loop_counter = 0;
+        total_counter++;
+    
+        bool got_element = pop(s, &w_a, &w_b);
+
+        if (!got_element) { // Stack is empty
+            ASSERT_ZERO(pthread_mutex_lock(mutex));
+            if (*waiting_for_work == input_data->t - 1) { // Computation done
+                *done = true;
+                ASSERT_ZERO(pthread_cond_broadcast(wait_for_work));
+                break;
+            }
+
+            (*waiting_for_work)++;
+            ASSERT_ZERO(pthread_cond_wait(wait_for_work, mutex));
+            (*waiting_for_work)--;
+            ASSERT_ZERO(pthread_mutex_unlock(mutex));
+            
+            if (*done)
+                break;
+
             continue;
         }
 
-        loop_counter++;
-        total_counter++;
-
-        // int monitor_stack_size = m->stack_size;
-        // if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && monitor_stack_size < MAX_MONITOR_SIZE) { // Share work
-        //     share_work(m, s, id);
-        //     loop_counter = 0;
-        //     continue;
-        // }
-
-        Node* n_top = pop(s);
-        w_a = n_top->a;
-        w_b = n_top->b;
-        
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
             w_a = w_b;
@@ -80,75 +91,24 @@ void* worker(void* args) {
         b = &w_b->set;
 
         if (is_sumset_intersection_trivial(a, b)) {
-            int monitor_stack_size = m->stack_size;
-            if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && monitor_stack_size < MAX_MONITOR_SIZE) { // share this branch
-                Stack temp_s;
-                stack_init(&temp_s);
-                Node* temp_top;
-                Node* temp_bottom;
-                int elems = 0;
-                // for (size_t i = input_data->d; i >= a->last; --i)
-                for (size_t i = a->last; i <= input_data->d; ++i)
-                    if (!does_sumset_contain(b, i)) {
-                        elems++;
+            int elems = 0;
+            for (size_t i = input_data->d; i >= a->last; --i)
+                if (!does_sumset_contain(b, i)) {
+                    elems++;
 
-                        Wrapper* new_wrapper = init_wrapper(1, w_a);
+                    Wrapper* new_wrapper = init_wrapper(1, w_a);
 
-                        sumset_add(&new_wrapper->set, a, i);
-                        push(s, new_wrapper, w_b);
-                        if (elems == 1)
-                            temp_bottom = top(&temp_s);
-                    }
-                temp_top = top(&temp_s);
-                if (elems == 0) {
-                    try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
-                    try_dealloc_wrapper_with_decrement(w_b);
-                } else {
-                    share_work(m, temp_top, temp_bottom, elems, id);
-                    increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
-                    increment_ref_counter_n(w_b, elems - 1);
+                    sumset_add(&new_wrapper->set, a, i);
+                    push(s, new_wrapper, w_b);
+                    ASSERT_ZERO(pthread_cond_signal(wait_for_work));
                 }
-                loop_counter = 0;
+            if (elems == 0) {
+                try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
+                try_dealloc_wrapper_with_decrement(w_b);
             } else {
-               int elems = 0;
-                // for (size_t i = input_data->d; i >= a->last; --i)
-                for (size_t i = a->last; i <= input_data->d; ++i)
-                    if (!does_sumset_contain(b, i)) {
-                        elems++;
-
-                        Wrapper* new_wrapper = init_wrapper(1, w_a);
-
-                        sumset_add(&new_wrapper->set, a, i);
-                        push(s, new_wrapper, w_b);
-                    }
-                if (elems == 0) {
-                    try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
-                    try_dealloc_wrapper_with_decrement(w_b);
-                } else {
-                    increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
-                    increment_ref_counter_n(w_b, elems - 1);
-                } 
+                increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
+                increment_ref_counter_n(w_b, elems - 1);
             }
-            
-            // int elems = 0;
-            // // for (size_t i = input_data->d; i >= a->last; --i)
-            // for (size_t i = a->last; i <= input_data->d; ++i)
-            //     if (!does_sumset_contain(b, i)) {
-            //         elems++;
-
-            //         Wrapper* new_wrapper = init_wrapper(1, w_a);
-
-            //         sumset_add(&new_wrapper->set, a, i);
-            //         Data data = (Data) {.a = new_wrapper, .b = w_b};
-            //         push(s, &data);
-            //     }
-            // if (elems == 0) {
-            //     try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
-            //     try_dealloc_wrapper_with_decrement(w_b);
-            // } else {
-            //     increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
-            //     increment_ref_counter_n(w_b, elems - 1);
-            // }
         }
         else {
             // The branch is finished
@@ -158,13 +118,7 @@ void* worker(void* args) {
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
         }
-
-        if (size(s) > max_size)
-            max_size = size(s);
-
-        free(n_top);
-    } while (!(*done)); // Monitor will indicate that the whole work is done, 
-    // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
+    } while (true); 
 
     LOG("%d: Worker DONE, loops: %d, max stack size: %ld", id, total_counter, max_size);
     return 0;

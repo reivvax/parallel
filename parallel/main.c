@@ -5,12 +5,9 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define STACK_FILLING_FACTOR 3
+#define STACK_FILLING_FACTOR 2
 
-bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input_data, Solution* best_solution, int threads_count) {
-    Stack s;
-    stack_init(&s);
-
+bool fill_stacks(_Atomic LockFreeStack* s, Wrapper* w_a, Wrapper* w_b, InputData* input_data, Solution* best_solution, int threads_count) {
     const Sumset* a;
     a = &w_a->set;
 
@@ -19,18 +16,17 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
     
     Wrapper* tmp;
 
-    push(&s, w_a, w_b); // First element
-    size_t max_size = 0;
+    push(s, w_a, w_b); // First element
+    size_t stack_size = 1;
 
     // Basically the 'worker' code
     do {
-        if (empty(&s))
-            return true; // We are already done
-
-        Node* top = pop(&s);
-        w_a = top->a;
-        w_b = top->b;
+        bool got_element = pop(s, &w_a, &w_b);
         
+        if (!got_element)
+            return true;
+
+        stack_size--;
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
             w_a = w_b;
@@ -49,7 +45,8 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
 
                     sumset_add(&new_wrapper->set, a, i);
-                    push(&s, new_wrapper, w_b);
+                    push(s, new_wrapper, w_b);
+                    stack_size++;
                 }
             
             if (elems == 0) {
@@ -69,21 +66,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
             try_dealloc_wrapper_with_decrement(w_b);
         }
 
-        free(top);
-        if (size(&s) > max_size)
-            max_size = size(&s);
-    } while (size(&s) < STACK_FILLING_FACTOR * threads_count);
-    // Assure that every thread will have at least `STACK_FILLING_FACTOR` elements on its stack
-
-    int current_stack = 0;
-
-    // OPTIONALLY REDISTRIBUTE THOSE NODES IN MORE REASONABLE MANNER
-    while (!empty(&s)) {
-        Node* top = pop(&s);
-        push(&args[current_stack].s, top->a, top->b);
-        current_stack = (current_stack + 1) % threads_count;
-        free(top);
-    }
+    } while (stack_size < STACK_FILLING_FACTOR * threads_count);
 
     return false;
 }
@@ -98,21 +81,26 @@ int main()
     Solution best_solution;
     solution_init(&best_solution);
 
-    Monitor m;
-    monitor_init(&m, input_data.t, input_data.d);
+    _Atomic LockFreeStack s = {0, NULL};
+    pthread_cond_t wait_for_work;
+    pthread_cond_init(&wait_for_work, NULL);
+    pthread_mutex_t mutex;
+    pthread_mutex_init(&mutex, NULL);
+    int waiting_for_work = 0;
+    bool threads_done = false;
 
     WorkerArgs args[input_data.t]; 
     for (int i = 0; i < input_data.t; ++i)
-        args_init(args + i, i, &m, &input_data);
+        args_init(args + i, i, &s, &wait_for_work, &mutex, &waiting_for_work, &threads_done, &input_data);
 
     Wrapper* w_a = init_wrapper(1, NULL);
     w_a->set = input_data.a_start;
     Wrapper* w_b = init_wrapper(1, NULL);
     w_b->set = input_data.b_start;
 
-    bool done = fill_stacks(args, w_a, w_b, &input_data, &best_solution, input_data.t);
+    bool solved = fill_stacks(&s, w_a, w_b, &input_data, &best_solution, input_data.t);
 
-    if (!done) {
+    if (!solved) {
         pthread_t threads[input_data.t];
 
         for (int i = 0; i < input_data.t; ++i)
