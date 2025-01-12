@@ -4,7 +4,7 @@
 #include <pthread.h>
 
 #include "lock_free_stack.h"
-
+#include "nodes_stack.h"
 // #define ITERS_TO_SHARE_WORK 256 // 2^8
 // #define MAX_MONITOR_SIZE 256
 // #define STACK_SIZE_TO_SHARE_WORK 10
@@ -48,6 +48,9 @@ void* worker(void* args) {
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
 
+    NodeStack ns = {0};
+    NodeStack* node_stack = &ns;
+
     uint64_t total_counter = 0;
 
     const Sumset* a;
@@ -60,13 +63,15 @@ void* worker(void* args) {
     do {
         total_counter++;
     
-        bool got_element = pop(s, &w_a, &w_b);
+        Node* node = pop(s);
 
-        if (!got_element) { // Stack is empty
+        if (!node) { // Stack is empty
             ASSERT_ZERO(pthread_mutex_lock(mutex));
             if (*waiting_for_work == input_data->t - 1) { // Computation done
                 *done = true;
                 ASSERT_ZERO(pthread_cond_broadcast(wait_for_work));
+                ASSERT_ZERO(pthread_mutex_unlock(mutex));
+                reset_stack(node_stack);
                 break;
             }
 
@@ -75,11 +80,16 @@ void* worker(void* args) {
             (*waiting_for_work)--;
             ASSERT_ZERO(pthread_mutex_unlock(mutex));
             
-            if (*done)
+            if (*done) {
+                reset_stack(node_stack);
                 break;
+            }
 
             continue;
         }
+
+        w_a = node->a;
+        w_b = node->b;
 
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
@@ -94,17 +104,25 @@ void* worker(void* args) {
             int elems = 0;
             for (size_t i = input_data->d; i >= a->last; --i)
                 if (!does_sumset_contain(b, i)) {
-                    elems++;
 
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
-
                     sumset_add(&new_wrapper->set, a, i);
-                    push(s, new_wrapper, w_b);
+
+                    if (!elems) {
+                        node->a = new_wrapper;
+                        node->b = w_b;                        
+                        push(s, node);
+                    } else {
+                        Node* new_node = init_node(new_wrapper, w_b);
+                        push(s, new_node);
+                    }
                     ASSERT_ZERO(pthread_cond_signal(wait_for_work));
+                    elems++;
                 }
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
+                node_push(node_stack, node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -114,9 +132,11 @@ void* worker(void* args) {
             // The branch is finished
             if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
                 solution_build(best_solution, input_data, a, b);
-
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
+            node_push(node_stack, node);
+            if (node_size(node_stack) >= 2500)
+                reset_stack(node_stack);
         }
     } while (true); 
 

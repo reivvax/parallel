@@ -15,18 +15,21 @@ bool fill_stacks(_Atomic LockFreeStack* s, Wrapper* w_a, Wrapper* w_b, InputData
     b = &w_b->set;
     
     Wrapper* tmp;
-
-    push(s, w_a, w_b); // First element
+    Node* node = init_node(w_a, w_b);
+    push(s, node); // First element
     size_t stack_size = 1;
 
     // Basically the 'worker' code
     do {
-        bool got_element = pop(s, &w_a, &w_b);
+        Node* node = pop(s);
         
-        if (!got_element)
+        if (!node)
             return true;
 
         stack_size--;
+        w_a = node->a;
+        w_b = node->b;
+
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
             w_a = w_b;
@@ -45,13 +48,15 @@ bool fill_stacks(_Atomic LockFreeStack* s, Wrapper* w_a, Wrapper* w_b, InputData
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
 
                     sumset_add(&new_wrapper->set, a, i);
-                    push(s, new_wrapper, w_b);
+                    Node* new_node = init_node(new_wrapper, w_b);
+                    push(s, new_node);
                     stack_size++;
                 }
             
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
+                free(node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -64,6 +69,7 @@ bool fill_stacks(_Atomic LockFreeStack* s, Wrapper* w_a, Wrapper* w_b, InputData
             
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
+            free(node);
         }
 
     } while (stack_size < STACK_FILLING_FACTOR * threads_count);

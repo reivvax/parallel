@@ -1,3 +1,6 @@
+#ifndef LOCK_FREE_STACK_H
+#define LOCK_FREE_STACK_H 
+
 #include <stdlib.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -16,14 +19,17 @@ typedef struct LockFreeStack {
     Node* head;
 } LockFreeStack;
 
-void push(_Atomic LockFreeStack* stack, Wrapper* a, Wrapper* b) {
-    LockFreeStack next, prev;
-
+Node* init_node(Wrapper* a, Wrapper* b) {
     Node* new_node = (Node*) malloc(sizeof(Node));
     ASSERT_MALLOC_SUCCEEDED(new_node);
     
     new_node->a = a;
     new_node->b = b;
+    return new_node;
+}
+
+void push(_Atomic LockFreeStack* stack, Node* new_node) {
+    LockFreeStack next, prev;
     
     prev = atomic_load(stack);
     do {
@@ -33,20 +39,19 @@ void push(_Atomic LockFreeStack* stack, Wrapper* a, Wrapper* b) {
     } while (!atomic_compare_exchange_weak(stack, &prev, next));
 }
 
-bool pop(_Atomic LockFreeStack* stack, Wrapper** a, Wrapper** b) {
+Node* pop(_Atomic LockFreeStack* stack) {
     LockFreeStack next, prev;
     
     prev = atomic_load(stack);
     do {
-        if (prev.head == NULL) {
-            return false;
-        }
+        if (prev.head == NULL)
+            return NULL;
+
         next.head = prev.head->next;
         next.tag = prev.tag + 1;
     } while(!atomic_compare_exchange_weak(stack, &prev, next));
 
-    *a = prev.head->a;
-    *b = prev.head->b;
-    free(prev.head);
-    return true;
+    return prev.head;
 }
+
+#endif
