@@ -9,11 +9,6 @@
 #include "utils.h"
 #include "wrapper.h"
 
-typedef struct Data {
-    Wrapper* a;
-    Wrapper* b;
-} Data;
-
 typedef struct Node {
     Wrapper* a;
     Wrapper* b;
@@ -25,12 +20,12 @@ typedef struct Stack {
     size_t size;
 } Stack;
 
-static Node* init_node(Data* data, Node* prev) {
+static Node* init_node(Wrapper* a, Wrapper* b, Node* prev) {
     Node* n = (Node*) malloc(sizeof(Node));
     ASSERT_MALLOC_SUCCEEDED(n);
 
-    n->a = data->a;
-    n->b = data->b;
+    n->a = a;
+    n->b = b;
     n->prev = prev;
 
     return n;
@@ -60,12 +55,12 @@ static void swap_stacks(Stack* a, Stack* b) {
     b->size = tmp_s;
 }
 
-static void push(Stack* s, Data* data) {
+static void push(Stack* s, Node* n) {
     if (!s)
         return;
-    Node* n = init_node(data, s->head);
-    s->size++;
+    n->prev = s->head;
     s->head = n;
+    s->size++;
 }
 
 // Remember to free the node

@@ -5,7 +5,7 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define STACK_FILLING_FACTOR 3
+#define STACK_FILLING_FACTOR 2
 
 bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input_data, Solution* best_solution, int threads_count) {
     Stack s;
@@ -13,15 +13,14 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
 
     const Sumset* a;
     a = &w_a->set;
-    // initial_wrappers[0] = (Wrapper) {.ref_counter = ULLONG_MAX >> 1, .set = *a, .prev = NULL};
 
     const Sumset* b;
     b = &w_b->set;
     
     Wrapper* tmp;
 
-    Data data = (Data) {.a = w_a, .b = w_b};
-    push(&s, &data); // First element
+    Node* node = init_node(w_a, w_b, NULL);
+    push(&s, node); // First element
     size_t max_size = 0;
 
     // Basically the 'worker' code
@@ -29,9 +28,9 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
         if (empty(&s))
             return true; // We are already done
 
-        Node* top = pop(&s);
-        w_a = top->a;
-        w_b = top->b;
+        node = pop(&s);
+        w_a = node->a;
+        w_b = node->b;
         
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
@@ -46,18 +45,25 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
             int elems = 0;
             for (size_t i = input_data->d; i >= a->last; --i)
                 if (!does_sumset_contain(b, i)) {
-                    elems++;
-
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
-
                     sumset_add(&new_wrapper->set, a, i);
-                    Data data = (Data) {.a = new_wrapper, .b = w_b};
-                    push(&s, &data);
+
+                    if (!elems) {
+                        node->a = new_wrapper;
+                        node->b = w_b;
+                        push(&s, node);
+                    } else {
+                        Node* new_node = init_node(new_wrapper, w_b, NULL);
+                        push(&s, new_node);
+                    }
+
+                    elems++;
                 }
-            
+
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
+                free(node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -70,9 +76,9 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
             
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
+            free(node);
         }
 
-        free(top);
         if (size(&s) > max_size)
             max_size = size(&s);
     } while (size(&s) < STACK_FILLING_FACTOR * threads_count);
@@ -80,13 +86,10 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
 
     int current_stack = 0;
 
-    // OPTIONALLY REDISTRIBUTE THOSE NODES IN MORE REASONABLE MANNER
     while (!empty(&s)) {
         Node* top = pop(&s);
-        Data data = (Data) {.a = top->a, .b = top->b};
-        push(&args[current_stack].s, &data);
+        push(&args[current_stack].s, top);
         current_stack = (current_stack + 1) % threads_count;
-        free(top);
     }
 
     return false;
