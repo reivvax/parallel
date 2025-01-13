@@ -83,7 +83,6 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
 
 int main()
 {
-    LOG("START");
     InputData input_data;
     input_data_read(&input_data);
     // input_data_init(&input_data, 8, 20, (int[]){0}, (int[]){1, 0});

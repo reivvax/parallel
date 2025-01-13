@@ -4,8 +4,8 @@
 #include "stack.h"
 #include "monitor.h"
 
-#define ITERS_TO_SHARE_WORK 128
-#define STACK_SIZE_TO_SHARE_WORK 32
+#define ITERS_TO_SHARE_WORK 64
+#define STACK_SIZE_TO_SHARE_WORK 16
 
 typedef struct WorkerArgs {
     int id;
@@ -30,17 +30,17 @@ void* worker(void* args) {
     WorkerArgs* unpacked_args = args;
 
     int id = unpacked_args->id;
-    Monitor* m = unpacked_args->m;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
     Stack* s = &unpacked_args->s;
+    
+    // Synchronization arguments
+    Monitor* m = unpacked_args->m;
     _Atomic bool* collective_stack_empty = &m->empty;
     bool* done = unpacked_args->done;
     
     uint32_t loop_counter = 0;
-    uint32_t total_counter = 0;
 
-    size_t max_size = 0;
     const Sumset* a;
     Wrapper* w_a;
 
@@ -56,7 +56,6 @@ void* worker(void* args) {
         }
 
         loop_counter++;
-        total_counter++;
 
         if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
             share_work(m, s, id);
@@ -101,14 +100,9 @@ void* worker(void* args) {
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
         }
-
-        if (size(s) > max_size)
-            max_size = size(s);
-
     } while (!(*done)); // Monitor will indicate that the whole work is done, 
     // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
 
-    LOG("%d: Worker DONE, loops: %d, max stack size: %ld", id, total_counter, max_size);
     return 0;
 }
 
