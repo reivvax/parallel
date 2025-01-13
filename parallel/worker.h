@@ -76,7 +76,6 @@ void* worker(void* args) {
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            // for (size_t i = input_data->d; i >= a->last; --i)
             for (size_t i = a->last; i <= input_data->d; ++i)
                 if (!does_sumset_contain(b, i)) {
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
