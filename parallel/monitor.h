@@ -28,7 +28,6 @@ typedef struct Monitor {
 static void monitor_init(Monitor* m, int t, int d) {
     m->t = t;
     m->d = d;
-    stack_init(&m->s);
     m->empty = true;
     ASSERT_ZERO(pthread_mutex_init(&m->mutex, NULL));
     ASSERT_ZERO(pthread_cond_init(&m->give_work, NULL));
@@ -82,7 +81,7 @@ static void take_work(Monitor* m, Stack* dst, int id) {
 
     } else { // The stack is not empty, just take the nodes
         // Current strategy:
-        // If m->s.size > MONITOR_THRESHOLD, take m->s.size / 2 elements, else take m->s.size
+        // If m->s.size > MONITOR_THRESHOLD, take 2 * m->s.size / 3 elements, else take m->s.size
         LOG("%d: MONITOR STACK SIZE BEFORE ( no sleep ): %ld", id, m->s.size);
         if (m->s.size > MONITOR_THRESHOLD)
             rearrange_n(&m->s, dst, (2 * m->s.size) / 3);
@@ -106,15 +105,11 @@ static void share_work(Monitor* m, Stack* src, int id) {
         m->signalling = false;
     }
     m->waiting_to_give_work--;
-    // Here lies the logic of sharing work between threads
-    // For now, 
-    // if waiting_for_work = 0, then give away CONST_GIVEAWAY nodes,
+    // Here lies the logic of sharing work between threads.
+    // If waiting_for_work = 0, then give away CONST_GIVEAWAY nodes,
     // else take the number of currently waiting threads 'waiting_for_work'
     // and leave on the stack (s->size / (MAX(waiting_for_work, 1) + 1)) elements if waiting_for_work > 0 else assume waiting_for_work = 1.
     // Distribute the rest over waiting workers
-    // Other possible approaches:
-    // - Always give away half of the stack
-    // - Always give away constant number of nodes
 
     int count = (src->size + 1) / 2;
 

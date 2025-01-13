@@ -5,11 +5,10 @@
 #include "common/io.h"
 #include "worker.h"
 
-#define STACK_FILLING_FACTOR 5
+#define STACK_FILLING_FACTOR 10
 
 bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input_data, Solution* best_solution, int threads_count) {
-    Stack s;
-    stack_init(&s);
+    Stack s = {0};
 
     const Sumset* a;
     a = &w_a->set;
@@ -19,8 +18,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
     
     Wrapper* tmp;
 
-    Node* node = init_node(w_a, w_b, NULL);
-    push(&s, node); // First element
+    push(&s, w_a, w_b); // First element
     size_t max_size = 0;
 
     // Basically the 'worker' code
@@ -28,9 +26,7 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
         if (empty(&s))
             return true; // We are already done
 
-        node = pop(&s);
-        w_a = node->a;
-        w_b = node->b;
+        pop(&s, &w_a, &w_b);
         
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
@@ -47,23 +43,13 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
                 if (!does_sumset_contain(b, i)) {
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
                     sumset_add(&new_wrapper->set, a, i);
-
-                    if (!elems) {
-                        node->a = new_wrapper;
-                        node->b = w_b;
-                        push(&s, node);
-                    } else {
-                        Node* new_node = init_node(new_wrapper, w_b, NULL);
-                        push(&s, new_node);
-                    }
-
+                    push(&s, new_wrapper, w_b);
                     elems++;
                 }
 
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
-                free(node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -76,7 +62,6 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
             
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
-            free(node);
         }
 
         if (size(&s) > max_size)
@@ -85,10 +70,11 @@ bool fill_stacks(WorkerArgs args[], Wrapper* w_a, Wrapper* w_b, InputData* input
     // Assure that every thread will have at least `STACK_FILLING_FACTOR` elements on its stack
 
     int current_stack = 0;
-
+    Wrapper* temp_a;
+    Wrapper* temp_b;
     while (!empty(&s)) {
-        Node* top = pop(&s);
-        push(&args[current_stack].s, top);
+        pop(&s, &temp_a, &temp_b);
+        push(&args[current_stack].s, temp_a, temp_b);
         current_stack = (current_stack + 1) % threads_count;
     }
 
@@ -105,13 +91,21 @@ int main()
     Solution best_solution;
     solution_init(&best_solution);
 
-    Monitor m;
+    Monitor m = {0};
     monitor_init(&m, input_data.t, input_data.d);
-
+    
     WorkerArgs args[input_data.t]; 
-    for (int i = 0; i < input_data.t; ++i)
+    for (int i = 0; i < input_data.t; ++i) {
+        args[i] = (WorkerArgs) {
+            .id = 0,
+            .m = NULL,
+            .input_data = NULL,
+            .best_solution = {0},
+            .s = {0},
+            .done = NULL
+        };
         args_init(args + i, i, &m, &input_data);
-
+    }
     Wrapper* w_a = init_wrapper(1, NULL);
     w_a->set = input_data.a_start;
     Wrapper* w_b = init_wrapper(1, NULL);

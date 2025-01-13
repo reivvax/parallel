@@ -21,7 +21,7 @@ void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data) {
     args->m = m;
     args->input_data = input_data;
     solution_init(&args->best_solution);
-    stack_init(&args->s);
+    args->s.size = 0;
     args->done = &m->done;
 }
 
@@ -64,9 +64,7 @@ void* worker(void* args) {
             continue;
         }
 
-        Node* node = pop(s);
-        w_a = node->a;
-        w_b = node->b;
+        pop(s, &w_a, &w_b);
         
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
@@ -84,27 +82,16 @@ void* worker(void* args) {
                 if (!does_sumset_contain(b, i)) {
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
                     sumset_add(&new_wrapper->set, a, i);
-                    
-                    if (!elems) {
-                        node->a = new_wrapper;
-                        node->b = w_b;
-                        push(s, node);
-                    } else {
-                        Node* new_node = init_node(new_wrapper, w_b, NULL);
-                        push(s, new_node);
-                    }
-
+                    push(s, new_wrapper, w_b);
                     elems++;
                 }
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
-                free(node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
             }
-            LOG("PUSHED %d ELEMS ON STACK\n", elems);
         }
         else {
             // The branch is finished
@@ -113,8 +100,6 @@ void* worker(void* args) {
 
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
-            free(node);
-            LOG("BRANCH IS FINISHED");
         }
 
         if (size(s) > max_size)
