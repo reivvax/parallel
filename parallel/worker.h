@@ -58,7 +58,7 @@ void* worker(void* args) {
         loop_counter++;
         total_counter++;
 
-        if (size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
+        if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
             share_work(m, s, id);
             loop_counter = 0;
             continue;

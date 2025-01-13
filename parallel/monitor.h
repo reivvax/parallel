@@ -7,7 +7,7 @@
 #include "stack.h"
 #include "utils.h"
 
-#define MONITOR_THRESHOLD 32
+#define MONITOR_THRESHOLD 8
 
 typedef struct Monitor {
     int t;                          // t parameter from input_data
