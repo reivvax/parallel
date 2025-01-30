@@ -109,6 +109,10 @@ for d in ${D_VALUES[@]}; do # Iteration over d parameter
         fi
 
         parallel_output=$( (echo "$THREADS_COUNT $d 0 1 1" | time -f'%e %U' $PARALLEL > /dev/null) 2>&1 )
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error:${NC} Failed to run parallel for d=$d, t=$THREADS_COUNT"
+            exit 1
+        fi
         parallel_real_time=$(echo "$parallel_output" | awk '{print $1}')
         if [ $parallel_real_time = "0.00" ]; then
             NEGLIGIBLE="true"

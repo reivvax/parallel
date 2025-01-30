@@ -1,57 +1,45 @@
 #ifndef WORKER_H
 #define WORKER_H
 
-#include <pthread.h>
+#include "stack.h"
+#include "monitor.h"
 
-#include "lock_free_stack.h"
-#include "nodes_stack.h"
-// #define ITERS_TO_SHARE_WORK 256 // 2^8
-// #define MAX_MONITOR_SIZE 256
-// #define STACK_SIZE_TO_SHARE_WORK 10
+#define ITERS_TO_SHARE_WORK 64
+#define STACK_SIZE_TO_SHARE_WORK 16
 
 typedef struct WorkerArgs {
     int id;
-    _Atomic LockFreeStack* s;               // One collective stack
-    pthread_cond_t* wait_for_work;
-    pthread_mutex_t* mutex;
-    int* waiting_for_work;
-    bool* done;
+    Monitor* m;
     InputData* input_data;
     Solution best_solution;
+    Stack s;                     // Initial stack for worker
+    bool* done;                  // Indicator whether the whole computation is done
 } WorkerArgs;
 
-void args_init(WorkerArgs* args, int id, _Atomic LockFreeStack* s, pthread_cond_t* wait_for_work, pthread_mutex_t* mutex, int* waiting_for_work, bool* done, InputData* input_data) {
+void args_init(WorkerArgs* args, int id, Monitor* m, InputData* input_data) {
     args->id = id;
-    args->s = s;
-    args->wait_for_work = wait_for_work;
-    args->mutex = mutex;
-    args->waiting_for_work = waiting_for_work;
-    args->done = done;
+    args->m = m;
     args->input_data = input_data;
     solution_init(&args->best_solution);
+    args->s.size = 0;
+    args->done = &m->done;
 }
 
 void* worker(void* args) {
     // Unpack arguments
     WorkerArgs* unpacked_args = args;
 
-    // int id = unpacked_args->id;
-    
-    // Synchronization arguments
-    _Atomic LockFreeStack* s = unpacked_args->s;
-    pthread_cond_t* wait_for_work = unpacked_args->wait_for_work;
-    pthread_mutex_t* mutex = unpacked_args->mutex;
-    int* waiting_for_work = unpacked_args->waiting_for_work;
-    bool* done = unpacked_args->done;
-
-    // Data arguments
+    int id = unpacked_args->id;
     InputData* input_data = unpacked_args->input_data;
     Solution* best_solution = &unpacked_args->best_solution;
-
-    NodeStack ns = {0};
-    NodeStack* node_stack = &ns;
-
-    uint64_t total_counter = 0;
+    Stack* s = &unpacked_args->s;
+    
+    // Synchronization arguments
+    Monitor* m = unpacked_args->m;
+    _Atomic bool* collective_stack_empty = &m->empty;
+    bool* done = unpacked_args->done;
+    
+    uint32_t loop_counter = 0;
 
     const Sumset* a;
     Wrapper* w_a;
@@ -61,36 +49,22 @@ void* worker(void* args) {
 
     Wrapper* tmp;
     do {
-        total_counter++;
-    
-        Node* node = pop(s);
-
-        if (!node) { // Stack is empty
-            ASSERT_ZERO(pthread_mutex_lock(mutex));
-            if (*waiting_for_work == input_data->t - 1) { // Computation done
-                *done = true;
-                ASSERT_ZERO(pthread_cond_broadcast(wait_for_work));
-                ASSERT_ZERO(pthread_mutex_unlock(mutex));
-                reset_stack(node_stack);
-                break;
-            }
-
-            (*waiting_for_work)++;
-            ASSERT_ZERO(pthread_cond_wait(wait_for_work, mutex));
-            (*waiting_for_work)--;
-            ASSERT_ZERO(pthread_mutex_unlock(mutex));
-            
-            if (*done) {
-                reset_stack(node_stack);
-                break;
-            }
-
+        if (empty(s)) { // We are out of nodes, ask the monitor for more
+            take_work(m, s, id);
+            loop_counter = 0;
             continue;
         }
 
-        w_a = node->a;
-        w_b = node->b;
+        loop_counter++;
 
+        if (loop_counter >= ITERS_TO_SHARE_WORK && size(s) >= STACK_SIZE_TO_SHARE_WORK && *collective_stack_empty) { // Share work
+            share_work(m, s, id);
+            loop_counter = 0;
+            continue;
+        }
+
+        pop(s, &w_a, &w_b);
+        
         if (w_a->set.sum > w_b->set.sum) {
             tmp = w_a;
             w_a = w_b;
@@ -102,27 +76,16 @@ void* worker(void* args) {
 
         if (is_sumset_intersection_trivial(a, b)) {
             int elems = 0;
-            for (size_t i = input_data->d; i >= a->last; --i)
+            for (size_t i = a->last; i <= input_data->d; ++i)
                 if (!does_sumset_contain(b, i)) {
-
                     Wrapper* new_wrapper = init_wrapper(1, w_a);
                     sumset_add(&new_wrapper->set, a, i);
-
-                    if (!elems) {
-                        node->a = new_wrapper;
-                        node->b = w_b;                        
-                        push(s, node);
-                    } else {
-                        Node* new_node = init_node(new_wrapper, w_b);
-                        push(s, new_node);
-                    }
-                    ASSERT_ZERO(pthread_cond_signal(wait_for_work));
+                    push(s, new_wrapper, w_b);
                     elems++;
                 }
             if (elems == 0) {
                 try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
                 try_dealloc_wrapper_with_decrement(w_b);
-                node_push(node_stack, node);
             } else {
                 increment_ref_counter_n(w_a, elems - 1); // -1, as we popped from the stack
                 increment_ref_counter_n(w_b, elems - 1);
@@ -132,15 +95,13 @@ void* worker(void* args) {
             // The branch is finished
             if (a->sum == b->sum && get_sumset_intersection_size(a, b) == 2 && a->sum > best_solution->sum)
                 solution_build(best_solution, input_data, a, b);
+
             try_dealloc_wrapper_with_decrement(w_a); // Decrement, as we popped from the stack
             try_dealloc_wrapper_with_decrement(w_b);
-            node_push(node_stack, node);
-            if (node_size(node_stack) >= 2500)
-                reset_stack(node_stack);
         }
-    } while (true); 
+    } while (!(*done)); // Monitor will indicate that the whole work is done, 
+    // the data race is not an issue, as the data in `done` address is modified iff all the workers are waiting on condition variable
 
-    LOG("%d: Worker DONE, loops: %d, max stack size: %ld", id, total_counter, max_size);
     return 0;
 }
 

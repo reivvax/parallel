@@ -12,7 +12,7 @@ typedef struct Wrapper {
     _Atomic uint64_t ref_counter;
     Sumset set;
     struct Wrapper* prev;
-} __attribute__((aligned(16))) Wrapper;
+} Wrapper;
 
 static Wrapper* init_wrapper(_Atomic uint64_t ref_counter, Wrapper* prev) {
     Wrapper* w = (Wrapper*) malloc(sizeof(Wrapper));
