@@ -1,3 +1,6 @@
+# Parallel
+The project implements the computation of the problem below in two versions: a non-recursive (but still single-threaded) version and a parallel (multi-threaded) version.
+
 # Computational Verification of a Combinatorial Hypothesis
 
 For a given multiset of natural numbers $A$, we define $\sum A = \sum_{a\in A}a$. For example, if $A={1, 2, 2, 2, 10, 10}$, then $\sum A=27$. For two multisets, we write $A \supseteq B$ if each element appears in $A$ at least as many times as in $B$. For the purpose of this problem, we adopt the following definitions.
@@ -38,5 +41,3 @@ Solve(d, A, B):
     else return 0
 ```
 where last A denotes the last element added to $A$; if $A = A_0$, we assume last A = 1 (i.e., recursion adds elements to $A_0$ in non-decreasing order).
-
-The project implements this computation in two versions: a non-recursive (but still single-threaded) version and a parallel (multi-threaded) version.
